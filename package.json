@@ -4,13 +4,19 @@
   "description": "",
   "main": "amazon-coupon-finder.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node weed-value-finder.js --selftest && node preroll-value-finder.js --selftest",
+    "weed": "node weed-value-finder.js --headless --json weed-scraped.json && node build-report.js",
+    "weed:report": "node build-report.js",
+    "weed:jars": "node weed-value-finder.js --only jars-east-tucson,jars-green-valley --jars-manual",
+    "preroll": "node preroll-value-finder.js --headless --json preroll-scraped.json && node build-preroll-report.js",
+    "preroll:report": "node build-preroll-report.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "exceljs": "^4.4.0",
     "playwright": "^1.61.1"
   }
 }
