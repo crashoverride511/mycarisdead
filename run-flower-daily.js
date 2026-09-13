@@ -65,7 +65,10 @@ async function ensureDaemon(profile, port) {
 // or the user's own Chrome. Recovery for a blocked pull: kill JARS, relaunch,
 // pull again.
 function killAllJars() {
-  const psCmd = "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'jars-chrome-profile|jars-daemon\\.js|remote-debugging-port=(9222|9223)' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {} }";
+  // NB: exclude $PID — this PowerShell's own command line contains the pattern
+  // below, so without the guard the pipeline matches its own shell and kills
+  // itself mid-run, leaving the rest of the targets alive.
+  const psCmd = "Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'jars-chrome-profile|jars-daemon\\.js|remote-debugging-port=(9222|9223)' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {} }";
   spawnSync('powershell', ['-NoProfile', '-Command', psCmd], { cwd: DIR, stdio: 'ignore' });
   for (const p of [9222, 9223]) { try { require('fs').unlinkSync(path.join(DIR, `.jars-daemon-ready-${p}`)); } catch (_) {} }
 }

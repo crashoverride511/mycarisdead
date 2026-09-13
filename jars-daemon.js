@@ -20,6 +20,15 @@ const READY = path.join(__dirname, `.jars-daemon-ready-${PORT}`);
 
 (async () => {
   try { fs.unlinkSync(READY); } catch (_) {}
+  // Clear stale Chrome singleton locks before opening the profile. A force-killed
+  // Chrome (the kill+relaunch recovery, or any prior-session crash) leaves these
+  // behind, and launchPersistentContext then refuses to open the "in use" profile
+  // — the profile-state gap that made relaunch unreliable. Every launch path
+  // (run-flower-daily ensureDaemon, jars-pull-cdp ensureDaemonSelf, manual) goes
+  // through here, so clearing them here fixes it once.
+  for (const f of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+    try { fs.rmSync(path.join(PROFILE_DIR, f), { force: true }); } catch (_) {}
+  }
   const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
     channel: 'chrome',
     headless: false,
