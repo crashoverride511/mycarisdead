@@ -626,7 +626,17 @@ const DUTCHIE_HARVEST = () => {
       const segLines = lines.slice(prev, idx); // option's own weight + price lines
       prev = idx + 1;
       const wMatch = lines[idx].match(/^add\s+(.+?)\s+to cart$/i);
-      const weightText = wMatch ? wMatch[1] : (segLines.find((l) => /oz|\bg\b|gram/i.test(l)) || '');
+      // Fallback must be a line that IS a weight token on its own (e.g. "1/2 oz",
+      // "3.5g") — not just a line that mentions "oz"/"g" somewhere in a sentence.
+      // A bare "Add to cart" button (e.g. a bundle/mix-and-match special widget
+      // embedded in the same card) has no weight of its own; if its segment's
+      // marketing copy happens to say something like "Make your own 1/2OZ from
+      // 8ths", the loose version of this match mistook that phrase for a real
+      // weight tier and paired it with a leftover price line from the product
+      // above it — silently doubling the reported grams for that price.
+      const weightLine = segLines.find((l) => /^\d(?:\/\d)?\s*oz$|^\d+(?:\.\d+)?\s*g(?:rams?)?$/i.test(l.trim()));
+      const weightText = wMatch ? wMatch[1] : (weightLine || '');
+      if (!weightText) continue;
       // Prices = ONLY standalone price lines in this segment (drops "$X off"
       // discount amounts and promo copy like "2 For $100").
       const priceLines = segLines.filter((l) => /^\$\s*\d/.test(l) && !/off|discount|for\b/i.test(l));
