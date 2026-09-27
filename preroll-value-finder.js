@@ -96,7 +96,10 @@ function toPrerollRecord(raw) {
   rec.count = parsePackCount(nameBlob);
   rec.infused = isInfused(nameBlob);
   if (rec.grams != null && rec.count > 1 && rec.grams / rec.count < MIN_SANE_JOINT_GRAMS) {
-    rec.grams = rec.grams * rec.count;
+    // Round to 2dp: binary floating point can't represent most decimal
+    // fractions exactly (0.6 * 6 lands on 3.5999999999999996, not 3.6), and
+    // that artifact would otherwise leak straight into the report/CSV/JSON.
+    rec.grams = Math.round(rec.grams * rec.count * 100) / 100;
     rec.weightLabel = `${rec.grams}g total`;
     rec.pricePerGram = rec.charged != null && rec.grams ? rec.charged / rec.grams : null;
   }
@@ -333,7 +336,11 @@ function selftest() {
     weightText: '.6g', priceText: '$60.00', strainText: 'Sativa', thcText: 'THC: 46.96%',
     blob: 'DIAMOND DUSTIES RUBY SATIVA 6PK | Dusties | Sativa | THC: 46.96% | .6g | $60.00',
   });
-  check('6pk per-joint-weight page: total grams corrected to 3.6', approx(p6pj.grams, 3.6), p6pj.grams);
+  // Exact equality here (not approx()) on purpose: this checks that the
+  // rounding actually landed on a clean 3.6, not that it's merely close to
+  // one - a stray 3.5999999999999996 must never reach weightLabel/CSV/JSON.
+  check('6pk per-joint-weight page: total grams corrected to a clean 3.6', p6pj.grams === 3.6, p6pj.grams);
+  check('6pk per-joint-weight page: weightLabel has no float artifact', p6pj.weightLabel === '3.6g total', p6pj.weightLabel);
   check('6pk per-joint-weight page: per-joint stays .6', approx(p6pj.perJointGrams, 0.6), p6pj.perJointGrams);
   check('6pk per-joint-weight page: $/g = 60/3.6 not 60/.6', approx(p6pj.pricePerGram, 60 / 3.6), p6pj.pricePerGram);
 
