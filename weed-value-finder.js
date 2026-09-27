@@ -187,12 +187,17 @@ function parseThc(text) {
 }
 
 // Convert a weight token to grams. Handles "3.5g", "14.17g", "3.7grams",
-// "1/8 oz", "1/2 oz", "1 oz", "1/4oz". Returns grams:Number|null + label.
+// ".5g" (bare-decimal shorthand for half a gram), "1/8 oz", "1/2 oz", "1 oz",
+// "1/4oz". Returns grams:Number|null + label.
 const OZ_TO_G = { '1/8': 3.5, '1/4': 7, '3/8': 10.5, '1/2': 14, '1': 28 }; // industry convention
 function parseWeightGrams(text) {
   if (!text) return { grams: null, label: null };
-  // explicit grams first (e.g. 14.17g, 3.5g, 3.7grams, /14g)
-  const g = text.match(/(\d+(?:\.\d+)?)\s*g(?:ram)?s?\b/i);
+  // explicit grams first (e.g. 14.17g, 3.5g, 3.7grams, /14g, .5g). The bare
+  // ".5g" alternative matters: some menus print half-gram prerolls with no
+  // leading zero, and a digit-required pattern skips the "." and reads "5g"
+  // off the *end* of the token — quietly turning 0.5g into 5g (a 10x inflate
+  // that made a $10 half-gram preroll look like an incredible $2/g flower jar).
+  const g = text.match(/(\d+(?:\.\d+)?|\.\d+)\s*g(?:ram)?s?\b/i);
   if (g) return { grams: Number(g[1]), label: `${g[1]}g` };
   // oz fractions (1/8 oz, 1/2 oz, 1 oz)
   const oz = text.match(/(\d(?:\/\d)?)\s*oz\b/i);
@@ -652,7 +657,7 @@ const DUTCHIE_HARVEST = () => {
       // 8ths", the loose version of this match mistook that phrase for a real
       // weight tier and paired it with a leftover price line from the product
       // above it — silently doubling the reported grams for that price.
-      const weightLine = segLines.find((l) => /^\d(?:\/\d)?\s*oz$|^\d+(?:\.\d+)?\s*g(?:rams?)?$/i.test(l.trim()));
+      const weightLine = segLines.find((l) => /^\d(?:\/\d)?\s*oz$|^(?:\d+(?:\.\d+)?|\.\d+)\s*g(?:rams?)?$/i.test(l.trim()));
       const weightText = wMatch ? wMatch[1] : (weightLine || '');
       if (!weightText) continue;
       // Prices = ONLY standalone price lines in this segment (drops "$X off"
@@ -1100,6 +1105,8 @@ function selftest() {
   check('1/2 oz = 14g', parseWeightGrams('1/2 oz').grams === 14);
   check('1 oz = 28g', parseWeightGrams('1 oz').grams === 28);
   check('14.17g literal', parseWeightGrams('ABUNDANT 14.17G').grams === 14.17);
+  check('.5g bare-decimal literal = half a gram, not 5', parseWeightGrams('.5g').grams === 0.5, parseWeightGrams('.5g'));
+  check('.75g bare-decimal literal', parseWeightGrams('.75g').grams === 0.75, parseWeightGrams('.75g'));
   check('3.7grams literal', parseWeightGrams('Jar 3.7grams').grams === 3.7);
 
   // thc + strain
