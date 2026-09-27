@@ -204,6 +204,18 @@ function parseWeightGrams(text) {
   return { grams: null, label: null };
 }
 
+// Parse a "Build/Make your own <weight> from <unit>'s @ $<price>" mix-and-match
+// bundle badge (e.g. "Build Your Own 1/2 Oz From1/4's @ $35") into the target
+// weight text and the flat total price. Some bundles advertise the mechanic
+// without an inline price (e.g. "Make Your Own 1/2OZ FROM 8THS (Shaka,
+// Springtime,Earthgrow)") — those return null rather than guessing a price.
+function parseBundleBadge(text) {
+  if (!text) return null;
+  const m = text.match(/(?:build|make)\s+your\s+own\s+([\d/.]+\s*(?:oz|g|grams?))\s+from.*?@\s*\$\s*(\d+(?:\.\d{1,2})?)/i);
+  if (!m) return null;
+  return { targetWeightText: m[1].trim(), totalPrice: Number(m[2]) };
+}
+
 // Classify lineage text into a bucket. Returns one of:
 // 'sativa' | 'sativa_hybrid' | 'hybrid' | 'indica_hybrid' | 'indica' | 'unknown'
 function classifyStrain(text) {
@@ -615,6 +627,12 @@ const DUTCHIE_HARVEST = () => {
     const strainLine = lines.find((l) => /^\s*(Indica|Sativa|Hybrid)/i.test(l)) || '';
     const thcLine = lines.find((l) => /THC\s*:/i.test(l)) || '';
     const header = [name, brand, strainLine, thcLine].filter(Boolean).join(' | ');
+    // Some cards show a green "Build/Make your own <weight> from <unit>'s"
+    // mix-and-match bundle badge (a link to a store-wide special). It's a
+    // card-level fact, not tied to any one weight segment — captured here and
+    // handed to every segment below so the Node side can compute a bundle
+    // price without a separate crawl of the /specials pages.
+    const bundleText = lines.find((l) => /^(?:build|make)\s+your\s+own\b/i.test(l)) || null;
 
     // Split the card's lines into per-option segments at each "Add ... to cart".
     const addIdx = [];
@@ -647,7 +665,7 @@ const DUTCHIE_HARVEST = () => {
       seen.add(key);
       out.push({
         name, brand, strainText: strainLine, thcText: thcLine,
-        weightText, priceText: priceLines.join(' | '), blob, url: href,
+        weightText, priceText: priceLines.join(' | '), blob, url: href, bundleText,
       });
     }
   }
@@ -678,9 +696,40 @@ async function scrapeDutchie(context, disp, opts) {
     const cards = await page.evaluate(DUTCHIE_HARVEST);
     console.log(`   harvested ${cards.length} card(s)`);
     await page.close();
-    return cards.slice(0, opts.maxPerStore).map((c) =>
-      normalizeListing({ dispensary: disp.name, dispensaryId: disp.id, ...c })
-    );
+    const seenBundles = new Set();
+    const rows = [];
+    for (const c of cards.slice(0, opts.maxPerStore)) {
+      const row = normalizeListing({ dispensary: disp.name, dispensaryId: disp.id, ...c });
+      rows.push(row);
+      if (!c.bundleText) continue;
+      const bundleKey = `${c.name}::${c.bundleText}`;
+      if (seenBundles.has(bundleKey)) continue;
+      seenBundles.add(bundleKey);
+      const bundle = parseBundleBadge(c.bundleText);
+      if (!bundle) {
+        // Bundle mechanic shown on the menu, but no flat total price on this
+        // page (likely a %-based combo) — flag it rather than drop it silently.
+        row.notes.push(`unpriced bundle special seen on menu: "${c.bundleText}"`);
+        continue;
+      }
+      const { grams: targetGrams, label: targetLabel } = parseWeightGrams(bundle.targetWeightText);
+      if (!targetGrams) continue;
+      const units = row.grams ? Math.round(targetGrams / row.grams) : null;
+      const bundleRow = normalizeListing({
+        dispensary: disp.name, dispensaryId: disp.id,
+        name: c.name, brand: c.brand, strainText: c.strainText, thcText: c.thcText,
+        weightText: bundle.targetWeightText, priceText: `$${bundle.totalPrice.toFixed(2)}`,
+        blob: [c.name, c.brand, c.strainText, c.thcText].filter(Boolean).join(' | '),
+        url: c.url,
+      });
+      const perUnitLabel = row.weightLabel || (row.grams ? `${row.grams}g` : 'a unit');
+      bundleRow.dealNote = units
+        ? `bundle special: ${units}× ${perUnitLabel} of eligible items = ${targetLabel} for $${bundle.totalPrice.toFixed(2)} — combine with other eligible items on this special, not a single-unit price`
+        : `bundle special: ${targetLabel} for $${bundle.totalPrice.toFixed(2)} — combine with other eligible items on this special, not a single-unit price`;
+      bundleRow.notes.push('mix-and-match bundle special');
+      rows.push(bundleRow);
+    }
+    return rows;
   } catch (e) {
     console.log(`   error: ${e.message} — skipping`);
     await page.close().catch(() => {});
@@ -1070,6 +1119,18 @@ function selftest() {
   check('clean strips brand+weight', cleanStrainName('ABUNDANT ORGANICS STRAWBERRY SERENITY 14.17G', 'Abundant Organics').trim() === 'strawberry serenity', cleanStrainName('ABUNDANT ORGANICS STRAWBERRY SERENITY 14.17G', 'Abundant Organics'));
   check('clean strips oz + jar', cleanStrainName('Seed Junky 3.5g - Banana Fruz', 'Seed Junky').includes('banana fruz'), cleanStrainName('Seed Junky 3.5g - Banana Fruz', 'Seed Junky'));
   check('toSlug', toSlug('Super Lemon Haze') === 'super-lemon-haze');
+  // mix-and-match bundle badges: parse a flat total price when the menu states
+  // one inline, and decline to guess when it doesn't.
+  check(
+    'bundle badge with inline price parses',
+    JSON.stringify(parseBundleBadge("Build Your Own 1/2 Oz From1/4's @ $35")) === JSON.stringify({ targetWeightText: '1/2 Oz', totalPrice: 35 }),
+    JSON.stringify(parseBundleBadge("Build Your Own 1/2 Oz From1/4's @ $35"))
+  );
+  check(
+    'bundle badge without inline price returns null',
+    parseBundleBadge('Make Your Own 1/2OZ FROM 8THS (Shaka,Springtime,Earthgrow)') === null
+  );
+  check('bundle badge: no text returns null', parseBundleBadge(null) === null && parseBundleBadge('') === null);
   check('infer piña/pina punch', inferSativaLean('Fenix 1/2 Supercharged Pina Punch') === 'pina punch', inferSativaLean('Fenix 1/2 Supercharged Pina Punch'));
   // end-to-end: JARS Pina Punch (no menu lineage) -> rescued as sativa-lean, passes filters
   const pina = normalizeListing({ dispensary: 'JARS', brand: 'Fenix', name: 'Fenix 1/2 Supercharged Pina Punch', weightText: '14g', priceText: '$40.00 | $70.00', blob: 'Fenix 1/2 Supercharged Pina Punch | Fenix | THC : 29% | 14g | $40.00 | $70.00 | In stock | 43%', thcText: 'THC : 29%' });
@@ -1234,7 +1295,7 @@ if (require.main === module) {
 
 module.exports = {
   normalizeListing, applyFilters, rankListings, parseWeightGrams, classifyStrain, parseThc,
-  parsePrices, inferSativaLean, applyLeanInference, classifyLeafly, cleanStrainName,
+  parsePrices, inferSativaLean, applyLeanInference, classifyLeafly, cleanStrainName, parseBundleBadge,
   // shared plumbing reused by sibling finders (e.g. preroll-value-finder.js)
   makeContext, gotoAndSettle, autoScroll, DUTCHIE_HARVEST, resolveLeanViaLeafly,
   BUCKET_LABEL, BUCKET_RANK, DISPENSARIES,
