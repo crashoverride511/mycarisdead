@@ -78,14 +78,28 @@ function isInfused(text) {
   return /\b(infused|infusion|diamond|kief|hash|hthc|liquid diamond|caviar|moon ?rock)\b/i.test(String(text || ''));
 }
 
+// Most Dutchie pack listings give the pack's TOTAL grams in the add-to-cart
+// weight (e.g. "5 Pack Prerolls 2.5g" = 0.5g/joint). Some instead show the
+// PER-JOINT weight with no total figure anywhere on the page (confirmed live:
+// a "6PK" listing whose only weight text was ".6g", meaning each of the 6
+// sticks is 0.6g, total 3.6g - not a 0.6g pack). Dividing an already-per-joint
+// number by the pack count implies an impossibly tiny stick; that's the tell
+// to multiply instead of divide.
+const MIN_SANE_JOINT_GRAMS = 0.15; // no real single pre-roll weighs less than this
+
 // Turn one raw Dutchie card into a normalized pre-roll record. Delegates ALL the
 // hard normalization (prices, THC, grams, lineage bucket, deal verification) to
 // the flower engine, then layers on pack count + per-joint math + infusion.
 function toPrerollRecord(raw) {
-  const rec = m.normalizeListing(raw); // grams here = the pack's TOTAL grams
+  const rec = m.normalizeListing(raw); // grams here = the pack's TOTAL grams (usually)
   const nameBlob = `${raw.name || ''} ${raw.weightText || ''} ${raw.blob || ''}`;
   rec.count = parsePackCount(nameBlob);
   rec.infused = isInfused(nameBlob);
+  if (rec.grams != null && rec.count > 1 && rec.grams / rec.count < MIN_SANE_JOINT_GRAMS) {
+    rec.grams = rec.grams * rec.count;
+    rec.weightLabel = `${rec.grams}g total`;
+    rec.pricePerGram = rec.charged != null && rec.grams ? rec.charged / rec.grams : null;
+  }
   rec.perJointGrams = rec.grams != null && rec.count ? rec.grams / rec.count : null;
   rec.pricePerJoint = rec.charged != null && rec.count ? rec.charged / rec.count : null;
   return rec;
@@ -309,6 +323,19 @@ function selftest() {
   check('10pk per-joint grams 0.35', approx(p10.perJointGrams, 0.35), p10.perJointGrams);
   const f10 = applyPrerollFilters([p10], { minThc: 27, includeHybrid: false });
   check('10pk dropped by THC floor', f10.kept.length === 0 && /THC/.test(f10.dropped[0].reason), JSON.stringify(f10.dropped.map((d) => d.reason)));
+
+  // 6-pack where the page states PER-JOINT weight (.6g), not the pack total -
+  // confirmed live on "DIAMOND DUSTIES RUBY SATIVA 6PK" (Earth's Healing).
+  // Naively treating .6g as the pack total gives an absurd 0.1g/joint and a
+  // fake $100/g; the real total is .6g x 6 = 3.6g -> $16.67/g.
+  const p6pj = toPrerollRecord({
+    dispensary: 'T', brand: 'Dusties', name: 'DIAMOND DUSTIES RUBY SATIVA 6PK',
+    weightText: '.6g', priceText: '$60.00', strainText: 'Sativa', thcText: 'THC: 46.96%',
+    blob: 'DIAMOND DUSTIES RUBY SATIVA 6PK | Dusties | Sativa | THC: 46.96% | .6g | $60.00',
+  });
+  check('6pk per-joint-weight page: total grams corrected to 3.6', approx(p6pj.grams, 3.6), p6pj.grams);
+  check('6pk per-joint-weight page: per-joint stays .6', approx(p6pj.perJointGrams, 0.6), p6pj.perJointGrams);
+  check('6pk per-joint-weight page: $/g = 60/3.6 not 60/.6', approx(p6pj.pricePerGram, 60 / 3.6), p6pj.pricePerGram);
 
   // single infused sativa, passes THC, per-joint == total
   const s1 = toPrerollRecord({
