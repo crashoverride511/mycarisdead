@@ -625,6 +625,11 @@ const DUTCHIE_HARVEST = () => {
   const seen = new Set();
   for (const card of cards) {
     const lines = (card.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    // Confirmed live: a depleted single-batch product's own page replaces "Add
+    // to cart" with "OUT OF STOCK" + "Notify Me When It's Back", but the price
+    // tile itself can still be present in the markup. Skip the whole card
+    // rather than report a price nobody can actually buy.
+    if (/\bout of stock\b/i.test(lines.join(' '))) continue;
     const link = card.querySelector('a[href]');
     const href = link ? link.href : null;
     const name = lines[0] || '';
