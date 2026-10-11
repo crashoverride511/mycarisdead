@@ -4,12 +4,14 @@
   "description": "",
   "main": "amazon-coupon-finder.js",
   "scripts": {
-    "test": "node weed-value-finder.js --selftest && node preroll-value-finder.js --selftest",
+    "test": "node weed-value-finder.js --selftest && node preroll-value-finder.js --selftest && node concentrate-value-finder.js --selftest",
     "weed": "node weed-value-finder.js --headless --json weed-scraped.json && node build-report.js",
     "weed:report": "node build-report.js",
     "weed:jars": "node weed-value-finder.js --only jars-east-tucson,jars-green-valley --jars-manual",
     "preroll": "node preroll-value-finder.js --headless --json preroll-scraped.json && node build-preroll-report.js",
-    "preroll:report": "node build-preroll-report.js"
+    "preroll:report": "node build-preroll-report.js",
+    "concentrate": "node concentrate-value-finder.js --headless --json concentrate-scraped.json && node build-concentrate-report.js",
+    "concentrate:report": "node build-concentrate-report.js"
   },
   "keywords": [],
   "author": "",
