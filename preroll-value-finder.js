@@ -39,8 +39,10 @@
  *   node preroll-value-finder.js --json preroll-scraped.json
  *   node preroll-value-finder.js --selftest           # math checks, no browser
  *
- * JARS locks its menu to your IP location, same as flower, so JARS pre-rolls are
- * hand-entered via prerolls-manual.json and merged by build-preroll-report.js.
+ * JARS isn't scraped by this tool at all — only the Dutchie-platform stores
+ * carry a pre-rolls category here (see loadDispensaries). There is
+ * deliberately no hand-entered/cached fallback for it: a stale static price
+ * matched by product name is worse than JARS being absent from a run.
  */
 
 'use strict';
@@ -374,7 +376,8 @@ function selftest() {
 
 function loadDispensaries(opts) {
   // Reuse the flower tool's dispensary list; only the Dutchie stores carry a
-  // pre-roll category. JARS is geo-locked (hand-entered via prerolls-manual.json).
+  // pre-roll category here. JARS isn't scraped by this tool at all (no
+  // hand-entered fallback either — see the header comment above).
   let list = m.DISPENSARIES.filter((d) => d.platform === 'dutchie');
   if (opts.configPath) {
     const raw = JSON.parse(fs.readFileSync(opts.configPath, 'utf8'));

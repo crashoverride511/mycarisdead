@@ -1,15 +1,18 @@
 /**
  * build-report.js
  * -------------------------------------------------------------------------
- * Turns a raw scrape (weed-scraped.json, written by weed-value-finder.js) plus
- * any hand-entered JARS items (jars-manual.json) into the three deliverables:
+ * Turns a raw scrape (weed-scraped.json, written by weed-value-finder.js)
+ * into the three deliverables:
  *   - weed-best-value.csv   (spreadsheet-friendly)
  *   - weed-best-value.xlsx  (formatted, 2 sheets)
  *   - weed-best-value.html  (mobile phone page)
  *
- * Why a separate step: JARS locks its menu to your IP's location, so it can't be
- * auto-scraped from a non-Arizona connection. You paste JARS flower items into
- * jars-manual.json and this merges them into the ranking with the same math.
+ * Every run is a fresh pull from the live scrape only. There is deliberately
+ * no hand-entered/manual-JSON merge step: a static file matched by product
+ * name can't track a live menu's price, weight, or THC%, and a stale entry
+ * silently blended into "best value" is worse than JARS just being absent
+ * from a run its geofencing blocked. Use `npm run weed:jars` (with
+ * --jars-manual) to confirm the store by hand and scrape it live instead.
  *
  * Run it directly after a scrape, or via `npm run weed` which does both.
  *   node build-report.js
@@ -31,32 +34,13 @@ if (!fs.existsSync(SCRAPE)) {
 
 const base = JSON.parse(fs.readFileSync(SCRAPE, 'utf8'));
 const opts = base.opts || { minThc: 27, includeHybrid: false };
+const scraped = base.results || [];
 
-// Raw scraped results never carry manual:true, so starting from the raw scrape
-// means re-running this never double-counts the hand-entered JARS items.
-const scraped = (base.results || []).filter((r) => !r.manual);
-
-let manual = [];
-try { manual = JSON.parse(fs.readFileSync('jars-manual.json', 'utf8')); } catch (_) { /* optional */ }
-
-const manualRecs = [];
-for (const it of manual) {
-  const r = m.normalizeListing(it);
-  m.applyLeanInference(r);
-  if (it.manualNote) r.notes.push(it.manualNote);
-  r.manual = true;
-  manualRecs.push(r);
-}
-const keptManual = m.applyFilters(manualRecs, opts).kept;
-for (const d of manualRecs.filter((r) => !keptManual.includes(r))) {
-  console.log(`   (manual item skipped: ${d.name} — THC ${d.thc}, ${d.strainLabel})`);
-}
-
-const ranked = m.rankListings(scraped.concat(keptManual), Boolean(opts.preferSativa));
+const ranked = m.rankListings(scraped, Boolean(opts.preferSativa));
 const generatedAt = base.generatedAt || new Date().toISOString();
 
-// --- weed-best-value.json (final merged, for reference / the HTML/xlsx read from memory) ---
-fs.writeFileSync('weed-best-value.json', JSON.stringify({ opts, generatedAt, count: ranked.length, results: ranked, jarsManualAdded: keptManual.length }, null, 2));
+// --- weed-best-value.json (for reference / the HTML/xlsx read from memory) ---
+fs.writeFileSync('weed-best-value.json', JSON.stringify({ opts, generatedAt, count: ranked.length, results: ranked }, null, 2));
 
 // --- CSV ---
 const cols = ['pricePerGram', 'charged', 'original', 'discountPct', 'dealReal', 'grams', 'weightLabel', 'thc', 'strainLabel', 'dispensary', 'brand', 'name', 'url'];
@@ -68,12 +52,7 @@ fs.writeFileSync('weed-best-value.html', buildHtml(ranked, generatedAt));
 
 // --- XLSX (async, last) ---
 buildXlsx(ranked).then(() => {
-  const jrank = ranked.findIndex((r) => r.manual);
-  console.log(`Report built: ${ranked.length} picks (${keptManual.length} hand-entered JARS).`);
-  if (jrank >= 0) {
-    const j = ranked[jrank];
-    console.log(`  JARS "${j.name}" ranks #${jrank + 1} at $${j.pricePerGram.toFixed(2)}/g ($${Math.round(j.pricePerGram * 28)}/oz).`);
-  }
+  console.log(`Report built: ${ranked.length} picks.`);
   console.log('  -> weed-best-value.csv / .xlsx / .html');
 });
 
@@ -86,22 +65,20 @@ function buildHtml(rows0, generatedAtISO) {
   const shortDisp = (s) => s.replace(' Dispensary', '').replace(' (Tucson)', '').replace('Trulieve / Harvest of Tucson', 'Trulieve/Harvest');
   const rows = rows0.map((x, i) => ({
     rank: i + 1, ppg: +x.pricePerGram.toFixed(2), oz: Math.round(x.pricePerGram * 28), price: x.charged,
-    wt: x.weightLabel || '?', thc: x.thc, bucket: x.strainBucket, inf: !!x.inferred, manual: !!x.manual,
+    wt: x.weightLabel || '?', thc: x.thc, bucket: x.strainBucket, inf: !!x.inferred,
     deal: x.dealReal, disc: x.discountPct, disp: x.dispensary, brand: x.brand || '', name: x.name, url: x.url || '',
-    note: (x.notes || []).find((n) => /BOGO|effective/i.test(n)) || '',
   }));
   const card = (r) => {
-    const mark = r.manual ? { t: 'J', cls: 'jars' } : r.bucket === 'sativa' ? { t: '★', cls: 'sativa' } : r.inf ? { t: '≈', cls: 'inf' } : { t: '', cls: '' };
+    const mark = r.bucket === 'sativa' ? { t: '★', cls: 'sativa' } : r.inf ? { t: '≈', cls: 'inf' } : { t: '', cls: '' };
     const lineage = r.bucket === 'sativa' ? 'Pure sativa' : 'Sativa-lean';
-    const lineageNote = r.manual ? 'JARS · by hand' : r.inf ? 'inferred' : 'menu-labeled';
+    const lineageNote = r.inf ? 'inferred' : 'menu-labeled';
     const dealChip = r.deal === true ? `<span class="chip deal">✓ ${r.disc}% off</span>` : r.deal === false ? `<span class="chip warn">⚠ unverified</span>` : '';
-    const bogo = r.note ? `<span class="chip bogo">BOGO ≈$1.43/g</span>` : '';
-    return `<article class="card${r.manual ? ' is-jars' : ''}" data-ppg="${r.ppg}" data-thc="${r.thc}" data-pure="${r.bucket === 'sativa' ? 1 : 0}" data-deal="${r.deal === true ? 1 : 0}">
+    return `<article class="card" data-ppg="${r.ppg}" data-thc="${r.thc}" data-pure="${r.bucket === 'sativa' ? 1 : 0}" data-deal="${r.deal === true ? 1 : 0}">
   <div class="rank"><span class="mk ${mark.cls}">${mark.t}</span><span class="num">${r.rank}</span></div>
   <div class="body">
     <div class="prod">${escape(r.brand ? r.brand + ' · ' : '')}${escape(r.name)}</div>
     <div class="line2"><span class="thc">${r.thc}%</span><span class="lin ${mark.cls}">${lineage}<small>${lineageNote}</small></span><span class="disp">${escape(shortDisp(r.disp))}</span></div>
-    <div class="chips">${dealChip}${bogo}<span class="chip qty">${escape(r.wt)} · $${r.price}</span></div>
+    <div class="chips">${dealChip}<span class="chip qty">${escape(r.wt)} · $${r.price}</span></div>
   </div>
   <div class="price"><div class="ppg"><span class="cur">$</span>${r.ppg.toFixed(2)}<span class="per">/g</span></div><div class="oz">$${r.oz}/oz</div>${r.url ? `<a class="go" href="${escape(r.url)}" target="_blank" rel="noopener">open ↗</a>` : ''}</div>
 </article>`;
@@ -130,10 +107,9 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 .count{font-size:12px;color:var(--faint);padding:10px 2px 8px;font-weight:600}
 .list{display:flex;flex-direction:column;gap:9px}
 .card{display:grid;grid-template-columns:30px 1fr auto;gap:11px;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 13px;box-shadow:var(--shadow)}
-.card.is-jars{border-color:color-mix(in srgb,var(--amber) 55%,var(--line));background:linear-gradient(180deg,color-mix(in srgb,var(--amber) 9%,var(--surface)),var(--surface))}
 .rank{display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:1px}
 .mk{font-size:15px;line-height:1;height:16px}
-.mk.sativa{color:var(--gold)}.mk.inf{color:var(--teal)}.mk.jars{color:var(--amber);font-weight:800;font-size:13px}
+.mk.sativa{color:var(--gold)}.mk.inf{color:var(--teal)}
 .rank .num{font-size:12px;font-weight:700;color:var(--faint)}
 .body{min-width:0;display:flex;flex-direction:column;gap:5px;justify-content:center}
 .prod{font-size:14.5px;font-weight:700;letter-spacing:-.01em;line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
@@ -141,12 +117,11 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 .thc{font-weight:800;color:var(--accent-ink)}
 .lin{color:var(--muted);font-weight:600}
 .lin small{color:var(--faint);font-weight:500;margin-left:4px;font-size:11px}
-.lin.sativa{color:var(--gold)}.lin.jars{color:var(--amber)}
+.lin.sativa{color:var(--gold)}
 .disp{color:var(--faint);margin-left:auto;font-size:11.5px;text-align:right}
 .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:1px}
 .chip{font-size:11px;font-weight:700;padding:2.5px 7px;border-radius:6px;white-space:nowrap}
 .chip.deal{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent-ink)}
-.chip.bogo{background:color-mix(in srgb,var(--gold) 20%,transparent);color:var(--gold)}
 .chip.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
 .chip.qty{background:var(--surface2);color:var(--muted);font-weight:600}
 .price{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px;text-align:right}
@@ -181,8 +156,8 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 ${rows.map(card).join('\n')}
 </div>
 <div class="empty" id="empty" hidden>Nothing matches that filter.</div>
-<div class="legend"><span><b style="color:var(--gold)">★</b> menu pure sativa</span><span><b style="color:var(--teal)">≈</b> lineage inferred</span><span><b style="color:var(--amber)">J</b> JARS (by hand)</span></div>
-<p class="note"><b>Reading it:</b> $/g is the price you pay (sale ÷ grams); $/oz is the 28g equivalent so sizes compare fairly. Deals are recomputed against the struck price — ✓ verified, ⚠ couldn't verify. JARS locks its menu to your location so it can't be auto-pulled here; JARS picks were entered by hand. Snapshot from the update time — reconfirm in-store.</p>
+<div class="legend"><span><b style="color:var(--gold)">★</b> menu pure sativa</span><span><b style="color:var(--teal)">≈</b> lineage inferred</span></div>
+<p class="note"><b>Reading it:</b> $/g is the price you pay (sale ÷ grams); $/oz is the 28g equivalent so sizes compare fairly. Deals are recomputed against the struck price — ✓ verified, ⚠ couldn't verify. JARS locks its menu to your location, so it only appears here when scraped live (<code>npm run weed:jars</code>) — never from a stale hand-entered file. Snapshot from the update time — reconfirm in-store.</p>
 </div>
 <script>
 (function(){
@@ -228,7 +203,7 @@ async function buildXlsx(ranked) {
   ws.getCell('A1').alignment = { vertical: 'middle', indent: 1 };
   ws.getRow(1).height = 30;
   ws.mergeCells('A2:N2');
-  ws.getCell('A2').value = '★ menu pure sativa   ≈ inferred sativa-lean   ✓ verified deal   ⚠ unverifiable   J = JARS (by hand)   |   $/oz = 28g equivalent';
+  ws.getCell('A2').value = '★ menu pure sativa   ≈ inferred sativa-lean   ✓ verified deal   ⚠ unverifiable   |   $/oz = 28g equivalent';
   ws.getCell('A2').font = { name: A, size: 9, italic: true, color: { argb: 'FF555555' } };
   ws.getCell('A2').alignment = { vertical: 'middle', indent: 1 };
   const HDR = 4;
@@ -247,7 +222,7 @@ async function buildXlsx(ranked) {
   const deal = (r) => r.dealReal === true ? `✓ ${r.discountPct}% off` : r.dealReal === false ? '⚠ unverified' : '';
   ranked.forEach((r, i) => {
     const rr = HDR + 1 + i, row = ws.getRow(rr);
-    const mark = r.manual ? 'J' : r.strainBucket === 'sativa' ? '★' : r.inferred ? '≈' : '';
+    const mark = r.strainBucket === 'sativa' ? '★' : r.inferred ? '≈' : '';
     const note = (r.notes || []).find((n) => /BOGO|effective|\$/.test(n)) || '';
     row.getCell(1).value = i + 1;
     row.getCell(2).value = r.pricePerGram; row.getCell(2).numFmt = '$#,##0.00';
@@ -265,11 +240,11 @@ async function buildXlsx(ranked) {
     if (r.url) { row.getCell(14).value = { text: 'open', hyperlink: r.url }; row.getCell(14).font = { name: A, size: 10, color: { argb: 'FF1155CC' }, underline: true }; }
     for (let c = 1; c <= 14; c++) {
       const cell = row.getCell(c);
-      if (c !== 14 || !r.url) cell.font = { name: A, size: 10, bold: i === 0 || r.manual };
+      if (c !== 14 || !r.url) cell.font = { name: A, size: 10, bold: i === 0 };
       cell.border = box();
       cell.alignment = { vertical: 'middle', horizontal: c <= 6 ? 'center' : 'left', indent: c <= 6 ? 0 : 1 };
     }
-    const fill = r.manual ? 'FFFFE8C2' : r.strainBucket === 'sativa' ? 'FFFFF6D6' : i % 2 ? 'FFEAF2EF' : null;
+    const fill = r.strainBucket === 'sativa' ? 'FFFFF6D6' : i % 2 ? 'FFEAF2EF' : null;
     if (fill) for (let c = 1; c <= 14; c++) row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
     row.height = 15;
   });

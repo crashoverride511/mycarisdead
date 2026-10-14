@@ -3,11 +3,16 @@
  * -------------------------------------------------------------------------
  * Concentrate sibling of build-report.js / build-preroll-report.js. Turns a
  * raw concentrate scrape (concentrate-scraped.json, written by
- * concentrate-value-finder.js) plus any hand-entered JARS concentrates
- * (concentrates-manual.json) into three deliverables:
+ * concentrate-value-finder.js) into three deliverables:
  *   - concentrate-best-value.csv   (spreadsheet-friendly)
  *   - concentrate-best-value.xlsx  (formatted, 2 sheets)
  *   - concentrate-best-value.html  (mobile phone page)
+ *
+ * Every run is a fresh pull from the live scrape only. There is deliberately
+ * no hand-entered/manual-JSON merge step: a static file matched by product
+ * name can't track a live menu's price, weight, or THC%, and a stale entry
+ * silently blended into "best value" is worse than JARS just being absent
+ * from a run its geofencing blocked.
  *
  * Run after a scrape, or via `npm run concentrate` which does both.
  *   node build-concentrate-report.js
@@ -28,28 +33,13 @@ if (!fs.existsSync(SCRAPE)) {
 
 const base = JSON.parse(fs.readFileSync(SCRAPE, 'utf8'));
 const opts = base.opts || { minThc: 0 };
-const scraped = (base.results || []).filter((r) => !r.manual);
+const scraped = base.results || [];
 
-let manual = [];
-try { manual = JSON.parse(fs.readFileSync('concentrates-manual.json', 'utf8')); } catch (_) { /* optional */ }
-
-const manualRecs = [];
-for (const it of manual) {
-  const r = cv.toConcentrateRecord(it);
-  if (it.manualNote) r.notes.push(it.manualNote);
-  r.manual = true;
-  manualRecs.push(r);
-}
-const keptManual = cv.applyConcentrateFilters(manualRecs, opts).kept;
-for (const d of manualRecs.filter((r) => !keptManual.includes(r))) {
-  console.log(`   (manual item skipped: ${d.name} — THC ${d.thc})`);
-}
-
-const ranked = cv.rankConcentrates(scraped.concat(keptManual));
+const ranked = cv.rankConcentrates(scraped);
 const generatedAt = base.generatedAt || new Date().toISOString();
 
-// --- merged JSON (reference) ---
-fs.writeFileSync('concentrate-best-value.json', JSON.stringify({ opts, generatedAt, count: ranked.length, results: ranked, jarsManualAdded: keptManual.length }, null, 2));
+// --- JSON (reference) ---
+fs.writeFileSync('concentrate-best-value.json', JSON.stringify({ opts, generatedAt, count: ranked.length, results: ranked }, null, 2));
 
 // --- CSV ---
 const cols = ['pricePerGram', 'charged', 'original', 'discountPct', 'dealReal', 'grams', 'weightLabel', 'thc', 'form', 'strainLabel', 'dispensary', 'brand', 'name', 'url'];
@@ -61,12 +51,7 @@ fs.writeFileSync('concentrate-best-value.html', buildHtml(ranked, generatedAt, o
 
 // --- XLSX (async, last) ---
 buildXlsx(ranked).then(() => {
-  const jrank = ranked.findIndex((r) => r.manual);
-  console.log(`Concentrate report built: ${ranked.length} picks (${keptManual.length} hand-entered JARS).`);
-  if (jrank >= 0) {
-    const j = ranked[jrank];
-    console.log(`  JARS "${j.name}" ranks #${jrank + 1} at $${j.pricePerGram.toFixed(2)}/g.`);
-  }
+  console.log(`Concentrate report built: ${ranked.length} picks.`);
   console.log('  -> concentrate-best-value.csv / .xlsx / .html');
 });
 
@@ -82,19 +67,18 @@ function buildHtml(rows0, generatedAtISO, opts) {
     rank: i + 1,
     ppg: +(x.pricePerGram ?? 0).toFixed(2),
     price: x.charged, wt: x.weightLabel || '?', thc: x.thc, form: x.form || '',
-    lineage: x.strainLabel || '', manual: !!x.manual,
+    lineage: x.strainLabel || '',
     deal: x.dealReal, disc: x.discountPct, disp: x.dispensary, brand: x.brand || '', name: x.name, url: x.url || '',
   }));
   const card = (r) => {
     const dealChip = r.deal === true ? `<span class="chip deal">✓ ${r.disc}% off</span>` : r.deal === false ? `<span class="chip warn">⚠ unverified</span>` : '';
     const formChip = r.form ? `<span class="chip form">${escape(r.form)}</span>` : '';
-    const jarsChip = r.manual ? `<span class="chip jars">JARS · by hand</span>` : '';
-    return `<article class="card${r.manual ? ' is-jars' : ''}" data-ppg="${r.ppg}" data-thc="${r.thc ?? -1}" data-deal="${r.deal === true ? 1 : 0}" data-form="${escape(r.form)}">
+    return `<article class="card" data-ppg="${r.ppg}" data-thc="${r.thc ?? -1}" data-deal="${r.deal === true ? 1 : 0}" data-form="${escape(r.form)}">
   <div class="rank"><span class="num">${r.rank}</span></div>
   <div class="body">
     <div class="prod">${escape(r.brand ? r.brand + ' · ' : '')}${escape(r.name)}</div>
     <div class="line2"><span class="thc">${r.thc != null ? r.thc + '%' : '? THC'}</span><span class="lin">${escape(r.lineage)}</span><span class="disp">${escape(shortDisp(r.disp))}</span></div>
-    <div class="chips">${dealChip}${formChip}${jarsChip}<span class="chip qty">${escape(r.wt)} · $${r.price}</span></div>
+    <div class="chips">${dealChip}${formChip}<span class="chip qty">${escape(r.wt)} · $${r.price}</span></div>
   </div>
   <div class="price"><div class="ppg"><span class="cur">$</span>${r.ppg.toFixed(2)}<span class="per">/g</span></div>${r.url ? `<a class="go" href="${escape(r.url)}" target="_blank" rel="noopener">open ↗</a>` : ''}</div>
 </article>`;
@@ -123,7 +107,6 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 .count{font-size:12px;color:var(--faint);padding:10px 2px 8px;font-weight:600}
 .list{display:flex;flex-direction:column;gap:9px}
 .card{display:grid;grid-template-columns:22px 1fr auto;gap:11px;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 13px;box-shadow:var(--shadow)}
-.card.is-jars{border-color:color-mix(in srgb,var(--warn) 55%,var(--line));background:linear-gradient(180deg,color-mix(in srgb,var(--warn) 9%,var(--surface)),var(--surface))}
 .rank{display:flex;align-items:flex-start;justify-content:center;padding-top:1px}
 .rank .num{font-size:12px;font-weight:700;color:var(--faint)}
 .body{min-width:0;display:flex;flex-direction:column;gap:5px;justify-content:center}
@@ -137,7 +120,6 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 .chip.deal{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent-ink)}
 .chip.form{background:color-mix(in srgb,var(--purple) 18%,transparent);color:var(--purple)}
 .chip.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
-.chip.jars{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn);font-weight:800}
 .chip.qty{background:var(--surface2);color:var(--muted);font-weight:600}
 .price{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px;text-align:right}
 .ppg{font-size:22px;font-weight:800;letter-spacing:-.03em;line-height:1;white-space:nowrap}
@@ -168,8 +150,8 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 ${rows.map(card).join('\n')}
 </div>
 <div class="empty" id="empty" hidden>Nothing matches that filter.</div>
-<div class="legend"><span><b style="color:var(--purple)">form</b> live resin/rosin/diamonds/etc</span><span><b style="color:var(--warn)">JARS</b> picks entered by hand</span></div>
-<p class="note"><b>Reading it:</b> ranked purely by $/g — no sativa or THC filter unless you ran the scraper with one. Deals are recomputed against the struck price — ✓ verified, ⚠ couldn't verify. JARS locks its menu to your location; JARS picks entered by hand. Snapshot — reconfirm in-store.</p>
+<div class="legend"><span><b style="color:var(--purple)">form</b> live resin/rosin/diamonds/etc</span></div>
+<p class="note"><b>Reading it:</b> ranked purely by $/g — no sativa or THC filter unless you ran the scraper with one. Deals are recomputed against the struck price — ✓ verified, ⚠ couldn't verify. JARS locks its menu to your location, so it only appears here when scraped live — never from a stale hand-entered file. Snapshot — reconfirm in-store.</p>
 </div>
 <script>
 (function(){
@@ -215,7 +197,7 @@ async function buildXlsx(ranked) {
   ws.getCell('A1').alignment = { vertical: 'middle', indent: 1 };
   ws.getRow(1).height = 30;
   ws.mergeCells('A2:K2');
-  ws.getCell('A2').value = 'J = JARS (by hand)   ✓ verified deal   ⚠ unverifiable   |   ranked purely by $/g — no strain or THC gate unless requested';
+  ws.getCell('A2').value = '✓ verified deal   ⚠ unverifiable   |   ranked purely by $/g — no strain or THC gate unless requested';
   ws.getCell('A2').font = { name: A, size: 9, italic: true, color: { argb: 'FF555555' } };
   ws.getCell('A2').alignment = { vertical: 'middle', indent: 1 };
   const HDR = 4;
@@ -232,7 +214,6 @@ async function buildXlsx(ranked) {
   const deal = (r) => r.dealReal === true ? `✓ ${r.discountPct}% off` : r.dealReal === false ? '⚠ unverified' : '';
   ranked.forEach((r, i) => {
     const rr = HDR + 1 + i, row = ws.getRow(rr);
-    const mark = r.manual ? 'J ' : '';
     row.getCell(1).value = i + 1;
     row.getCell(2).value = r.pricePerGram; row.getCell(2).numFmt = '$#,##0.00';
     row.getCell(3).value = r.charged; row.getCell(3).numFmt = '$#,##0.00';
@@ -243,15 +224,15 @@ async function buildXlsx(ranked) {
     row.getCell(8).value = deal(r);
     row.getCell(9).value = r.dispensary;
     row.getCell(10).value = r.brand;
-    row.getCell(11).value = mark + r.name;
+    row.getCell(11).value = r.name;
     if (r.url) { row.getCell(12).value = { text: 'open', hyperlink: r.url }; row.getCell(12).font = { name: A, size: 10, color: { argb: 'FF1155CC' }, underline: true }; }
     for (let c = 1; c <= 12; c++) {
       const cell = row.getCell(c);
-      if (c !== 12 || !r.url) cell.font = { name: A, size: 10, bold: i === 0 || r.manual };
+      if (c !== 12 || !r.url) cell.font = { name: A, size: 10, bold: i === 0 };
       cell.border = box();
       cell.alignment = { vertical: 'middle', horizontal: c <= 8 ? 'center' : 'left', indent: c <= 8 ? 0 : 1 };
     }
-    const fill = r.manual ? 'FFFFE8C2' : i % 2 ? 'FFF3E6D6' : null;
+    const fill = i % 2 ? 'FFF3E6D6' : null;
     if (fill) for (let c = 1; c <= 12; c++) row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
     row.height = 15;
   });

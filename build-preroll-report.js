@@ -2,11 +2,17 @@
  * build-preroll-report.js
  * -------------------------------------------------------------------------
  * Pre-roll sibling of build-report.js. Turns a raw pre-roll scrape
- * (preroll-scraped.json, written by preroll-value-finder.js) plus any
- * hand-entered JARS pre-rolls (prerolls-manual.json) into three deliverables:
+ * (preroll-scraped.json, written by preroll-value-finder.js) into three
+ * deliverables:
  *   - preroll-best-value.csv   (spreadsheet-friendly)
  *   - preroll-best-value.xlsx  (formatted, 2 sheets)
  *   - preroll-best-value.html  (mobile phone page)
+ *
+ * Every run is a fresh pull from the live scrape only. There is deliberately
+ * no hand-entered/manual-JSON merge step: a static file matched by product
+ * name can't track a live menu's price, weight, or THC%, and a stale entry
+ * silently blended into "best value" is worse than JARS just being absent
+ * from a run its geofencing blocked.
  *
  * Run after a scrape, or via `npm run preroll` which does both.
  *   node build-preroll-report.js
@@ -15,7 +21,6 @@
 
 const fs = require('fs');
 const ExcelJS = require('exceljs');
-const flower = require('./weed-value-finder.js');
 const pr = require('./preroll-value-finder.js');
 
 const SCRAPE = 'preroll-scraped.json';
@@ -28,29 +33,13 @@ if (!fs.existsSync(SCRAPE)) {
 
 const base = JSON.parse(fs.readFileSync(SCRAPE, 'utf8'));
 const opts = base.opts || { minThc: 27, includeHybrid: false, sort: 'ppg' };
-const scraped = (base.results || []).filter((r) => !r.manual);
+const scraped = base.results || [];
 
-let manual = [];
-try { manual = JSON.parse(fs.readFileSync('prerolls-manual.json', 'utf8')); } catch (_) { /* optional */ }
-
-const manualRecs = [];
-for (const it of manual) {
-  const r = pr.toPrerollRecord(it);
-  flower.applyLeanInference(r);
-  if (it.manualNote) r.notes.push(it.manualNote);
-  r.manual = true;
-  manualRecs.push(r);
-}
-const keptManual = pr.applyPrerollFilters(manualRecs, opts).kept;
-for (const d of manualRecs.filter((r) => !keptManual.includes(r))) {
-  console.log(`   (manual item skipped: ${d.name} — THC ${d.thc}, ${d.strainLabel})`);
-}
-
-const ranked = pr.rankPrerolls(scraped.concat(keptManual), opts);
+const ranked = pr.rankPrerolls(scraped, opts);
 const generatedAt = base.generatedAt || new Date().toISOString();
 
-// --- merged JSON (reference) ---
-fs.writeFileSync('preroll-best-value.json', JSON.stringify({ opts, generatedAt, count: ranked.length, results: ranked, jarsManualAdded: keptManual.length }, null, 2));
+// --- JSON (reference) ---
+fs.writeFileSync('preroll-best-value.json', JSON.stringify({ opts, generatedAt, count: ranked.length, results: ranked }, null, 2));
 
 // --- CSV ---
 const cols = ['pricePerGram', 'pricePerJoint', 'count', 'perJointGrams', 'infused', 'charged', 'original', 'discountPct', 'dealReal', 'grams', 'weightLabel', 'thc', 'strainLabel', 'dispensary', 'brand', 'name', 'url'];
@@ -62,12 +51,7 @@ fs.writeFileSync('preroll-best-value.html', buildHtml(ranked, generatedAt, opts)
 
 // --- XLSX (async, last) ---
 buildXlsx(ranked).then(() => {
-  const jrank = ranked.findIndex((r) => r.manual);
-  console.log(`Pre-roll report built: ${ranked.length} picks (${keptManual.length} hand-entered JARS).`);
-  if (jrank >= 0) {
-    const j = ranked[jrank];
-    console.log(`  JARS "${j.name}" ranks #${jrank + 1} at $${j.pricePerGram.toFixed(2)}/g · $${j.pricePerJoint.toFixed(2)}/joint.`);
-  }
+  console.log(`Pre-roll report built: ${ranked.length} picks.`);
   console.log('  -> preroll-best-value.csv / .xlsx / .html');
 });
 
@@ -84,17 +68,17 @@ function buildHtml(rows0, generatedAtISO, opts) {
     pj: x.pricePerJoint != null ? +x.pricePerJoint.toFixed(2) : null,
     count: x.count || 1, pjg: x.perJointGrams != null ? +x.perJointGrams.toFixed(2) : null,
     inf: !!x.infused, price: x.charged, wt: x.weightLabel || '?', thc: x.thc,
-    bucket: x.strainBucket, infer: !!x.inferred, manual: !!x.manual,
+    bucket: x.strainBucket, infer: !!x.inferred,
     deal: x.dealReal, disc: x.discountPct, disp: x.dispensary, brand: x.brand || '', name: x.name, url: x.url || '',
   }));
   const card = (r) => {
-    const mark = r.manual ? { t: 'J', cls: 'jars' } : r.bucket === 'sativa' ? { t: '★', cls: 'sativa' } : r.infer ? { t: '≈', cls: 'inf' } : { t: '', cls: '' };
+    const mark = r.bucket === 'sativa' ? { t: '★', cls: 'sativa' } : r.infer ? { t: '≈', cls: 'inf' } : { t: '', cls: '' };
     const lineage = r.bucket === 'sativa' ? 'Pure sativa' : 'Sativa-lean';
-    const lineageNote = r.manual ? 'JARS · by hand' : r.infer ? 'inferred' : 'menu-labeled';
+    const lineageNote = r.infer ? 'inferred' : 'menu-labeled';
     const dealChip = r.deal === true ? `<span class="chip deal">✓ ${r.disc}% off</span>` : r.deal === false ? `<span class="chip warn">⚠ unverified</span>` : '';
     const infChip = r.inf ? `<span class="chip inf">infused</span>` : '';
     const packLabel = r.count > 1 ? `${r.count}-pack · ${r.pjg}g ea` : 'single';
-    return `<article class="card${r.manual ? ' is-jars' : ''}" data-ppg="${r.ppg}" data-pj="${r.pj ?? 999}" data-thc="${r.thc}" data-pure="${r.bucket === 'sativa' ? 1 : 0}" data-deal="${r.deal === true ? 1 : 0}" data-inf="${r.inf ? 1 : 0}">
+    return `<article class="card" data-ppg="${r.ppg}" data-pj="${r.pj ?? 999}" data-thc="${r.thc}" data-pure="${r.bucket === 'sativa' ? 1 : 0}" data-deal="${r.deal === true ? 1 : 0}" data-inf="${r.inf ? 1 : 0}">
   <div class="rank"><span class="mk ${mark.cls}">${mark.t}</span><span class="num">${r.rank}</span></div>
   <div class="body">
     <div class="prod">${escape(r.brand ? r.brand + ' · ' : '')}${escape(r.name)}</div>
@@ -128,10 +112,9 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 .count{font-size:12px;color:var(--faint);padding:10px 2px 8px;font-weight:600}
 .list{display:flex;flex-direction:column;gap:9px}
 .card{display:grid;grid-template-columns:30px 1fr auto;gap:11px;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 13px;box-shadow:var(--shadow)}
-.card.is-jars{border-color:color-mix(in srgb,var(--amber) 55%,var(--line));background:linear-gradient(180deg,color-mix(in srgb,var(--amber) 9%,var(--surface)),var(--surface))}
 .rank{display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:1px}
 .mk{font-size:15px;line-height:1;height:16px}
-.mk.sativa{color:var(--gold)}.mk.inf{color:var(--teal)}.mk.jars{color:var(--amber);font-weight:800;font-size:13px}
+.mk.sativa{color:var(--gold)}.mk.inf{color:var(--teal)}
 .rank .num{font-size:12px;font-weight:700;color:var(--faint)}
 .body{min-width:0;display:flex;flex-direction:column;gap:5px;justify-content:center}
 .prod{font-size:14.5px;font-weight:700;letter-spacing:-.01em;line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
@@ -139,7 +122,7 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 .thc{font-weight:800;color:var(--accent-ink)}
 .lin{color:var(--muted);font-weight:600}
 .lin small{color:var(--faint);font-weight:500;margin-left:4px;font-size:11px}
-.lin.sativa{color:var(--gold)}.lin.jars{color:var(--amber)}
+.lin.sativa{color:var(--gold)}
 .disp{color:var(--faint);margin-left:auto;font-size:11.5px;text-align:right}
 .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:1px}
 .chip{font-size:11px;font-weight:700;padding:2.5px 7px;border-radius:6px;white-space:nowrap}
@@ -179,8 +162,8 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 ${rows.map(card).join('\n')}
 </div>
 <div class="empty" id="empty" hidden>Nothing matches that filter.</div>
-<div class="legend"><span><b style="color:var(--gold)">★</b> menu pure sativa</span><span><b style="color:var(--teal)">≈</b> lineage inferred</span><span><b style="color:var(--purple)">infused</b> kief/diamonds</span><span><b style="color:var(--amber)">J</b> JARS (by hand)</span></div>
-<p class="note"><b>Reading it:</b> big number is $/joint (price ÷ joints in the pack); $/g underneath is the total-flower price so packs and singles compare fairly. Infused prerolls (kief/diamonds) run higher THC and higher $/g — that's expected. Deals are recomputed against the struck price — ✓ verified, ⚠ couldn't verify. JARS locks its menu to your location; JARS picks entered by hand. Snapshot — reconfirm in-store.</p>
+<div class="legend"><span><b style="color:var(--gold)">★</b> menu pure sativa</span><span><b style="color:var(--teal)">≈</b> lineage inferred</span><span><b style="color:var(--purple)">infused</b> kief/diamonds</span></div>
+<p class="note"><b>Reading it:</b> big number is $/joint (price ÷ joints in the pack); $/g underneath is the total-flower price so packs and singles compare fairly. Infused prerolls (kief/diamonds) run higher THC and higher $/g — that's expected. Deals are recomputed against the struck price — ✓ verified, ⚠ couldn't verify. JARS locks its menu to your location, so it only appears here when scraped live — never from a stale hand-entered file. Snapshot — reconfirm in-store.</p>
 </div>
 <script>
 (function(){
@@ -229,7 +212,7 @@ async function buildXlsx(ranked) {
   ws.getCell('A1').alignment = { vertical: 'middle', indent: 1 };
   ws.getRow(1).height = 30;
   ws.mergeCells('A2:O2');
-  ws.getCell('A2').value = '★ menu pure sativa   ≈ inferred sativa-lean   ✓ verified deal   ⚠ unverifiable   J = JARS (by hand)   |   $/joint = price ÷ joints in pack';
+  ws.getCell('A2').value = '★ menu pure sativa   ≈ inferred sativa-lean   ✓ verified deal   ⚠ unverifiable   |   $/joint = price ÷ joints in pack';
   ws.getCell('A2').font = { name: A, size: 9, italic: true, color: { argb: 'FF555555' } };
   ws.getCell('A2').alignment = { vertical: 'middle', indent: 1 };
   const HDR = 4;
@@ -247,7 +230,7 @@ async function buildXlsx(ranked) {
   const deal = (r) => r.dealReal === true ? `✓ ${r.discountPct}% off` : r.dealReal === false ? '⚠ unverified' : '';
   ranked.forEach((r, i) => {
     const rr = HDR + 1 + i, row = ws.getRow(rr);
-    const mark = r.manual ? 'J' : r.strainBucket === 'sativa' ? '★' : r.inferred ? '≈' : '';
+    const mark = r.strainBucket === 'sativa' ? '★' : r.inferred ? '≈' : '';
     row.getCell(1).value = i + 1;
     row.getCell(2).value = r.pricePerJoint; row.getCell(2).numFmt = '$#,##0.00';
     row.getCell(3).value = r.pricePerGram; row.getCell(3).numFmt = '$#,##0.00';
@@ -265,11 +248,11 @@ async function buildXlsx(ranked) {
     if (r.url) { row.getCell(15).value = { text: 'open', hyperlink: r.url }; row.getCell(15).font = { name: A, size: 10, color: { argb: 'FF1155CC' }, underline: true }; }
     for (let c = 1; c <= 15; c++) {
       const cell = row.getCell(c);
-      if (c !== 15 || !r.url) cell.font = { name: A, size: 10, bold: i === 0 || r.manual };
+      if (c !== 15 || !r.url) cell.font = { name: A, size: 10, bold: i === 0 };
       cell.border = box();
       cell.alignment = { vertical: 'middle', horizontal: c <= 9 ? 'center' : 'left', indent: c <= 9 ? 0 : 1 };
     }
-    const fill = r.manual ? 'FFFFE8C2' : r.infused ? 'FFEDE7F6' : r.strainBucket === 'sativa' ? 'FFFFF6D6' : i % 2 ? 'FFEAF2EF' : null;
+    const fill = r.infused ? 'FFEDE7F6' : r.strainBucket === 'sativa' ? 'FFFFF6D6' : i % 2 ? 'FFEAF2EF' : null;
     if (fill) for (let c = 1; c <= 15; c++) row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
     row.height = 15;
   });

@@ -26,9 +26,10 @@
  *   node concentrate-value-finder.js --json concentrate-scraped.json
  *   node concentrate-value-finder.js --selftest         # math checks, no browser
  *
- * JARS locks its menu to your IP location, same as flower/prerolls, so JARS
- * concentrates (if any) are hand-entered via concentrates-manual.json and
- * merged by build-concentrate-report.js.
+ * JARS isn't scraped by this tool at all — only the Dutchie-platform stores
+ * carry a concentrates category here (see loadDispensaries). There is
+ * deliberately no hand-entered/cached fallback for it: a stale static price
+ * matched by product name is worse than JARS being absent from a run.
  */
 
 'use strict';
@@ -277,7 +278,8 @@ function selftest() {
 
 function loadDispensaries(opts) {
   // Reuse the flower tool's dispensary list; only the Dutchie stores carry a
-  // concentrates category. JARS is geo-locked (hand-entered via concentrates-manual.json).
+  // concentrates category here. JARS isn't scraped by this tool at all (no
+  // hand-entered fallback either — see the header comment above).
   let list = m.DISPENSARIES.filter((d) => d.platform === 'dutchie');
   if (opts.configPath) {
     const raw = JSON.parse(fs.readFileSync(opts.configPath, 'utf8'));
