@@ -106,7 +106,7 @@ async function pullJars(label, profile, port, env) {
   }
 
   // Dutchie scrape (required)
-  run('Dutchie scrape', ['weed-value-finder.js', '--headless', '--json', 'weed-results.json', '--csv', 'weed-results.csv']);
+  run('Dutchie scrape', ['weed-value-finder.js', '--headless', '--json', 'weed-results.json', '--csv', 'weed-results.csv'], { FLOWER_PIPELINE: '1' });
   // Merge JARS (uses whatever JARS json exists; skips missing stores gracefully)
   run('Merge JARS', ['merge-strainpicker.js']);
   // Build artifact HTML

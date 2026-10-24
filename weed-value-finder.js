@@ -100,16 +100,20 @@ try { ({ chromium } = require('playwright')); } catch (_) { /* only needed for l
 const DISPENSARIES = [
   // --- CONFIRMED Tucson-area Dutchie menus (live-verified: slug resolves,
   //     product cards load). These run by default. ---
-  { id: 'earths-healing-south', name: "Earth's Healing South", platform: 'dutchie', slug: 'earths-healing-south', menuType: 'rec' },
-  { id: 'earths-healing-north', name: "Earth's Healing North", platform: 'dutchie', slug: 'earths-healing-north', menuType: 'rec' },
-  { id: 'd2-eastside', name: 'D2 Dispensary (Eastside)', platform: 'dutchie', slug: 'd2-dispensary', menuType: 'rec' },
-  { id: 'd2-downtown', name: 'D2 Dispensary (Downtown)', platform: 'dutchie', slug: 'the-downtown-dispensary', menuType: 'rec' },
-  { id: 'botanica', name: 'Botanica', platform: 'dutchie', slug: 'botanica', menuType: 'rec' },
-  { id: 'trulieve-tucson', name: 'Trulieve / Harvest of Tucson', platform: 'dutchie', slug: 'harvest-of-tucson', menuType: 'rec' },
-  { id: 'nature-med', name: 'Nature Med (Tucson)', platform: 'dutchie', slug: 'nature-med-tucson', menuType: 'rec' },
-  { id: 'the-flower-shop', name: 'The Flower Shop', platform: 'dutchie', slug: 'the-flower-shop', menuType: 'rec' },
-  { id: 'tucson-saints', name: 'Tucson Saints', platform: 'dutchie', slug: 'tucson-saints', menuType: 'rec' },
-  { id: 'green-halo', name: 'Green Halo (Halo Cannabis)', platform: 'dutchie', slug: 'the-halo-blue-palo-verde', menuType: 'rec' },
+  { id: 'earths-healing-south', name: "Earth's Healing South", platform: 'dutchie', slug: 'earths-healing-south', menuType: 'med' },
+  { id: 'earths-healing-north', name: "Earth's Healing North", platform: 'dutchie', slug: 'earths-healing-north', menuType: 'med' },
+  { id: 'd2-eastside', name: 'D2 Dispensary (Eastside)', platform: 'dutchie', slug: 'd2-dispensary', menuType: 'med' },
+  { id: 'd2-downtown', name: 'D2 Dispensary (Downtown)', platform: 'dutchie', slug: 'the-downtown-dispensary', menuType: 'med' },
+  { id: 'botanica', name: 'Botanica', platform: 'dutchie', slug: 'botanica', menuType: 'med' },
+  { id: 'trulieve-tucson', name: 'Trulieve / Harvest of Tucson', platform: 'dutchie', slug: 'harvest-of-tucson', menuType: 'med' },
+  { id: 'nature-med', name: 'Nature Med (Tucson)', platform: 'dutchie', slug: 'nature-med-tucson', menuType: 'med' },
+  { id: 'the-flower-shop', name: 'The Flower Shop', platform: 'dutchie', slug: 'the-flower-shop', menuType: 'med' },
+  { id: 'tucson-saints', name: 'Tucson Saints', platform: 'dutchie', slug: 'tucson-saints', menuType: 'med' },
+  { id: 'green-halo', name: 'Green Halo (Halo Cannabis)', platform: 'dutchie', slug: 'the-halo-blue-palo-verde', menuType: 'med' },
+  { id: 'desert-bloom', name: 'Desert Bloom Re-Leaf Center', platform: 'dutchie', slug: 'desert-bloom-re-leaf-center-dispensary', menuType: 'med' }, // live-verified 2026-08-19
+  { id: 'nirvana-tucson', name: 'Nirvana Cannabis (Tucson)', platform: 'dutchie', slug: 'arizona-tree-equity-2-tucson', menuType: 'med' }, // live-verified 2026-08-19
+  { id: 'sol-flower-south', name: 'Sol Flower (South Tucson)', platform: 'dutchie', slug: 'sol-flower-dispensary-south-tucson', menuType: 'med' }, // live-verified 2026-08-19
+  { id: 'sol-flower-north', name: 'Sol Flower (North Tucson)', platform: 'dutchie', slug: 'sol-flower-dispensary-north-tucson', menuType: 'med' }, // live-verified 2026-08-19
 
   // --- JARS (Tucson + Green Valley): custom Buddi storefront over Dutchie's
   //     API — no public Dutchie slug. The adapter drives the age-gate → state
@@ -117,13 +121,14 @@ const DISPENSARIES = [
   //     non-AZ IP the site geo-defaults to another state and hides the AZ
   //     picker, so this is BEST-EFFORT: run it headed the first time to confirm
   //     it lands on the right store. Marked `verify` so it's opt-in.
-  { id: 'jars-east-tucson', name: 'JARS - East Tucson', platform: 'jars', store: 'JARS - East Tucson (Rec/Med)', match: 'East Tucson', shopSlug: 'jars-east-tucson', mode: 'rec' },
-  { id: 'jars-green-valley', name: 'JARS Green Valley', platform: 'jars', store: 'JARS Green Valley / Elevate AZ 1', match: 'Green Valley', shopSlug: 'jars-green-valley', mode: 'rec' },
+  { id: 'jars-east-tucson', name: 'JARS - East Tucson', platform: 'jars', store: 'JARS - East Tucson (Rec/Med)', match: 'East Tucson', shopSlug: 'jars-east-tucson', mode: 'med' },
+  { id: 'jars-green-valley', name: 'JARS Green Valley', platform: 'jars', store: 'JARS Green Valley / Elevate AZ 1', match: 'Green Valley', shopSlug: 'jars-green-valley', mode: 'med' },
 
   // --- Add more Tucson dispensaries here. To find a store's Dutchie slug:
   //     open its website's menu, and read the dutchie.com/embedded-menu/<slug>
   //     URL out of the menu iframe's `src`. Confirmed-not-on-public-Dutchie or
-  //     unverified: Prime Leaf, Curaleaf, Desert Bloom, Debbie's, Catalina. ---
+  //     unverified / NOT on public Dutchie: Prime Leaf (custom platform),
+  //     Curaleaf (own platform), Debbie's, Catalina. ---
 ];
 
 // ---------------------------------------------------------------------------
@@ -154,6 +159,7 @@ function parseArgs(argv) {
     jsonOut: get('json'),
     csvOut: get('csv'),
     selftest: has('selftest'),
+    why: get('why'), // regex: trace every scraped listing whose name matches it
   };
 }
 
@@ -173,7 +179,9 @@ function parsePrices(text) {
   for (const rawLine of String(text).replace(/,/g, '').split(/\n|\s\|\s/)) {
     const line = rawLine.trim();
     if (/\$\s*\d[\d.]*\s*(off|discount)\b/i.test(line)) continue; // "$10 off"
-    const m = line.match(/^\$\s*(\d+(?:\.\d{1,2})?)$/); // ONLY a price, alone
+    // ONLY a price, alone — or a price joined to its weight ("$25.00 - 1/2 oz",
+    // single-option Dutchie cards). Promo copy like "$30 Half Ounces" still fails.
+    const m = line.match(/^\$\s*(\d+(?:\.\d{1,2})?)(?:\s*[-–]\s*(?:\d+(?:[./]\d+)?|\.\d+)\s*(?:oz|g|grams?)\b)?$/i);
     if (m) out.push(Number(m[1]));
   }
   return out;
@@ -191,9 +199,10 @@ function parseThc(text) {
 const OZ_TO_G = { '1/8': 3.5, '1/4': 7, '3/8': 10.5, '1/2': 14, '1': 28 }; // industry convention
 function parseWeightGrams(text) {
   if (!text) return { grams: null, label: null };
-  // explicit grams first (e.g. 14.17g, 3.5g, 3.7grams, /14g)
-  const g = text.match(/(\d+(?:\.\d+)?)\s*g(?:ram)?s?\b/i);
-  if (g) return { grams: Number(g[1]), label: `${g[1]}g` };
+  // explicit grams first (e.g. 14.17g, 3.5g, 3.7grams, /14g, and bare-decimal
+  // singles like ".5g" / ".7g" that have no leading zero — common on pre-roll cards)
+  const g = text.match(/(\d+(?:\.\d+)?|\.\d+)\s*g(?:ram)?s?\b/i);
+  if (g) { const n = Number(g[1]); return { grams: n, label: `${n}g` }; }
   // oz fractions (1/8 oz, 1/2 oz, 1 oz)
   const oz = text.match(/(\d(?:\/\d)?)\s*oz\b/i);
   if (oz) {
@@ -287,16 +296,20 @@ const STRAIN_CACHE_PATH = path.join(__dirname, 'strain-cache.json');
 
 // Strip brand, weights, and packaging words off a menu product name to get at
 // the actual strain. "ABUNDANT ORGANICS STRAWBERRY SERENITY 14.17G" -> "strawberry serenity".
-const PACKAGING_WORDS = /\b(jar|mylar|bag|can|prepack|prepacked|preroll|pre-roll|smalls?|small|flower|infused|ground|reserve|select|minis?|premium|indoor|outdoor|greenhouse|whole|half|quarter|eighth|oz|ounce|gram|grams|prepackaged|deli|shake|popcorn|mix|match|bogo)\b/gi;
+const PACKAGING_WORDS = /\b(jar|mylar|bag|can|cannabis|pre-?pack(?:ed|aged)?|preroll|pre-roll|smalls?|small|flower|infused|ground|reserve|select|minis?|premium|indoor|outdoor|greenhouse|whole|half|quarter|eighth|oz|ounce|gram|grams|deli|shake|popcorn|mix|match|bogo)\b/gi;
 function cleanStrainName(name, brand) {
   let s = ` ${(name || '').toLowerCase()} `;
   if (brand) s = s.split(brand.toLowerCase()).join(' '); // drop the brand string
   s = s
     .replace(/\d+(?:\.\d+)?\s*(?:g|grams?|oz|ounces?)\b/gi, ' ') // weights
     .replace(/\b\d\/\d\s*(?:oz|g)?\b/gi, ' ') // 1/8, 1/2
-    .replace(/#\d+|\b\d+(?:\.\d+)?%?\b/g, ' ') // batch numbers, stray numbers
+    // strip only STANDALONE numbers (batch/stray) — keep digits fused to a strain
+    // token so "XJ-13", "MAC-1", "GMO 4"→"gmo" survive their letters. Was eating
+    // the "13" out of "XJ-13" and breaking the Leafly lookup entirely.
+    .replace(/#\d+|(?<![a-z0-9-])\d+(?:\.\d+)?%?(?![a-z0-9-])/gi, ' ')
     .replace(PACKAGING_WORDS, ' ')
     .replace(/[^a-z0-9'\s-]/gi, ' ')
+    .replace(/(^|\s)[-]+(?=\s|$)/g, ' ') // drop standalone dashes left where segments were removed
     .replace(/\s+/g, ' ')
     .trim();
   return s;
@@ -449,7 +462,20 @@ function normalizeListing(raw) {
   const blob = raw.blob || '';
   const prices = parsePrices(raw.priceText || blob);
   const thc = parseThc(raw.thcText || blob);
-  const { grams, label: weightLabel } = parseWeightGrams(raw.weightText || blob || raw.name);
+  // Weight: usually the menu/cart label is authoritative (it's the pack TOTAL).
+  // But for a SINGLE whose product name states an explicit weight that disagrees
+  // with the cart label (e.g. name "...1.3G" vs a stray cart "3g"), trust the
+  // name — it's the product spec. Guard on pack-ish text so we never override a
+  // multipack's total (where the name may show per-joint grams).
+  const cartW = parseWeightGrams(raw.weightText || blob);
+  const nameW = parseWeightGrams(raw.name || '');
+  const packish = /\b\d+\s*(?:pk|pack|ct)\b|\bpre-?rolls\b|\bblunts\b/i.test(`${raw.name || ''} ${raw.weightText || ''} ${blob}`);
+  let grams, weightLabel;
+  if (!packish && nameW.grams != null && cartW.grams != null && Math.abs(nameW.grams - cartW.grams) > 1e-6) {
+    ({ grams, label: weightLabel } = nameW);
+  } else {
+    ({ grams, label: weightLabel } = cartW.grams != null ? cartW : nameW);
+  }
   const bucket = classifyStrain(raw.strainText || blob);
 
   // Charged price = the lowest listed dollar amount (sale beats MSRP).
@@ -478,6 +504,7 @@ function normalizeListing(raw) {
     url: raw.url || null,
     notes: [],
   };
+  out.rawText = (raw.priceText ? `${raw.priceText} || ${blob}` : blob).slice(0, 400); // for --why tracing
 
   // ---- Deal verification ------------------------------------------------
   const claimsDiscount = /%\s*off|OFF\b|\bdeal\b|\bsale\b/i.test(blob) || original != null;
@@ -532,6 +559,31 @@ function applyFilters(records, opts) {
 
 // Rank. Default: best real $/g first. --prefer-sativa: pure sativa bucket
 // first (sativa < sativa_hybrid < hybrid), then $/g within each.
+// Collapse duplicate rows for the SAME product+weight at the SAME store. Some
+// Dutchie menus render a product twice (e.g. a "Featured"/staff-picks carousel
+// AND the main grid), sometimes with the add-button weight labelled differently
+// ("14G" vs "1/2 oz") — the per-card dedupe key (name::weightText::price) treats
+// those as distinct, so the same jar shows up as two board rows. Key on the
+// canonical product URL + gram weight (both grams are equal for a true dup);
+// genuine multi-weight products keep separate rows because their grams differ.
+// Keep the cheapest of any collision (and, tie, the one that already parsed a
+// deal), so we never lose the best price.
+function dedupeListings(list) {
+  const best = new Map();
+  const order = [];
+  for (const r of list) {
+    const idPart = r.url || `${r.name}|${r.brand}`;
+    const gPart = r.grams != null ? r.grams.toFixed(2) : '?';
+    const key = `${r.dispensaryId || r.dispensary}::${idPart}::${gPart}`;
+    const prev = best.get(key);
+    if (!prev) { best.set(key, r); order.push(key); continue; }
+    const rp = r.pricePerGram ?? Infinity;
+    const pp = prev.pricePerGram ?? Infinity;
+    if (rp < pp) best.set(key, r); // strictly cheaper wins; equal keeps the first seen
+  }
+  return order.map((k) => best.get(k));
+}
+
 function rankListings(list, preferSativa) {
   const arr = [...list];
   arr.sort((a, b) => {
@@ -645,37 +697,46 @@ const DUTCHIE_HARVEST = () => {
 };
 
 async function scrapeDutchie(context, disp, opts) {
-  const menuType = disp.menuType || 'rec';
-  const url = `https://dutchie.com/embedded-menu/${disp.slug}/products/flower?menuType=${menuType}`;
-  const page = await context.newPage();
+  const primary = disp.menuType || 'rec';
+  // Medical-first, then fall back to the REC menu for rec-only stores. The user
+  // wants rec deals included when a store has no medical menu (e.g. Sol Flower is
+  // rec-only). Rec-sourced items are FLAGGED (dispensary name gets a " · rec"
+  // suffix) so medical vs rec pricing is never confused on the board.
+  const tryOrder = primary === 'med' ? ['med', 'rec'] : [primary];
   console.log(`\n▶ ${disp.name} (dutchie:${disp.slug})`);
-  try {
-    await gotoAndSettle(page, url);
-    // 404 / bad slug guard
-    const bad = await page.evaluate(() =>
-      /can't find|not found|404|no products/i.test(document.body?.innerText || '')
-    ).catch(() => false);
-    await page.waitForTimeout(1200);
-    const count = await autoScroll(
-      page,
-      () => Array.from(document.querySelectorAll('button')).filter((b) => /add .* to cart|^add\b/i.test((b.textContent || '').trim())).length
-    );
-    if (!count) {
-      console.log(`   no product cards found${bad ? ' (menu says not-found — slug likely wrong)' : ''} — skipping`);
+  for (let i = 0; i < tryOrder.length; i++) {
+    const mt = tryOrder[i];
+    const url = `https://dutchie.com/embedded-menu/${disp.slug}/products/flower?menuType=${mt}`;
+    const page = await context.newPage();
+    try {
+      await gotoAndSettle(page, url);
+      const bad = await page.evaluate(() => /can't find|not found|404|no products/i.test(document.body?.innerText || '')).catch(() => false);
+      await page.waitForTimeout(1200);
+      const count = await autoScroll(
+        page,
+        () => Array.from(document.querySelectorAll('button')).filter((b) => /add .* to cart|^add\b/i.test((b.textContent || '').trim())).length
+      );
+      if (!count) {
+        await page.close();
+        if (i < tryOrder.length - 1) { console.log(`   no cards on ${mt} menu${bad ? ' (not-found)' : ''} — trying ${tryOrder[i + 1]} menu…`); continue; }
+        console.log(`   no product cards found${bad ? ' (menu says not-found — slug likely wrong)' : ''} — skipping`);
+        return [];
+      }
+      const cards = await page.evaluate(DUTCHIE_HARVEST);
+      const usedRec = mt === 'rec' && primary === 'med';
+      console.log(`   harvested ${cards.length} card(s)${usedRec ? '  ⚠ REC menu (store has no medical menu — prices flagged “rec”)' : ''}`);
       await page.close();
-      return [];
+      const label = disp.name + (usedRec ? ' · rec' : '');
+      return cards.slice(0, opts.maxPerStore).map((c) =>
+        normalizeListing({ dispensary: label, dispensaryId: disp.id, ...c })
+      );
+    } catch (e) {
+      console.log(`   error on ${mt}: ${e.message}`);
+      await page.close().catch(() => {});
+      // fall through to next menu type if any
     }
-    const cards = await page.evaluate(DUTCHIE_HARVEST);
-    console.log(`   harvested ${cards.length} card(s)`);
-    await page.close();
-    return cards.slice(0, opts.maxPerStore).map((c) =>
-      normalizeListing({ dispensary: disp.name, dispensaryId: disp.id, ...c })
-    );
-  } catch (e) {
-    console.log(`   error: ${e.message} — skipping`);
-    await page.close().catch(() => {});
-    return [];
   }
+  return [];
 }
 
 // ---- JARS custom storefront adapter ---------------------------------------
@@ -851,14 +912,18 @@ async function jarsActiveShopSlug(page) {
  * Then we VERIFY the active /shop/<slug> matches the target before trusting any
  * prices, and skip loudly if it doesn't (never return a wrong store's menu).
  */
-async function scrapeJars(context, disp, opts) {
+async function scrapeJars(context, disp, opts, hooks = {}) {
+  // Sibling finders (e.g. pre-rolls) reuse the whole store-switch flow but need a
+  // different category page and record mapper. Default to flower behavior.
+  const category = hooks.category || 'flower';
+  const mapCard = hooks.mapCard || normalizeListing;
   const page = await context.newPage();
   const mode = disp.mode || 'rec';
   const token = disp.match || disp.store;
   const wantSlug = (disp.shopSlug || '').toLowerCase();
   console.log(`\n▶ ${disp.name} (jars custom flow)`);
   try {
-    await gotoAndSettle(page, 'https://jarscannabis.com/category/flower');
+    await gotoAndSettle(page, `https://jarscannabis.com/category/${category}`);
     await page.waitForTimeout(1500);
     await clickByText(page, ['enter site']).catch(() => {}); // age gate (if shown)
     await page.waitForTimeout(1200);
@@ -876,7 +941,7 @@ async function scrapeJars(context, disp, opts) {
     // --- Path A: state + store picker (residential AZ IP) ---
     let slug = await jarsActiveShopSlug(page);
     if (slug !== wantSlug) {
-      await gotoAndSettle(page, 'https://jarscannabis.com/category/flower');
+      await gotoAndSettle(page, `https://jarscannabis.com/category/${category}`);
       await page.waitForTimeout(1200);
       await clickByText(page, ['arizona']).catch(() => {});
       await page.waitForTimeout(1500);
@@ -912,7 +977,7 @@ async function scrapeJars(context, disp, opts) {
     }
 
     // Load the menu and verify the ACTIVE store slug matches the target.
-    await gotoAndSettle(page, 'https://jarscannabis.com/category/flower');
+    await gotoAndSettle(page, `https://jarscannabis.com/category/${category}`);
     await page.waitForTimeout(2000);
     await autoScroll(page, () => document.querySelectorAll('a[href*="/product/"]').length, { maxRounds: 30 });
     slug = await jarsActiveShopSlug(page);
@@ -930,7 +995,7 @@ async function scrapeJars(context, disp, opts) {
     console.log(`   harvested ${cards.length} card(s) from store "${slug || 'active'}"`);
     await page.close();
     return cards.slice(0, opts.maxPerStore).map((c) =>
-      normalizeListing({ dispensary: disp.name, dispensaryId: disp.id, ...c })
+      mapCard({ dispensary: disp.name, dispensaryId: disp.id, ...c })
     );
   } catch (e) {
     console.log(`   error: ${e.message} — skipping`);
@@ -941,7 +1006,16 @@ async function scrapeJars(context, disp, opts) {
 
 async function scrapeDispensary(context, disp, opts) {
   if (disp.platform === 'dutchie') return scrapeDutchie(context, disp, opts);
-  if (disp.platform === 'jars') return scrapeJars(context, disp, opts);
+  if (disp.platform === 'jars') {
+    // JARS is NOT scraped here. The inline `scrapeJars` geo-switch is unreliable
+    // (it can't switch off the IP-nearest store → e.g. Green Valley lands on a
+    // Phoenix store and "fails"). JARS is pulled the reliable way by jars-lists.js
+    // (landOnStoreMedical: address→Search-by-store-name→Shop Medical, verified)
+    // and combined by merge-strainpicker.js. Run `node run-flower-daily.js` for
+    // the full board. Here we FLAG and skip — never the broken inline path.
+    console.log(`   ⏭  ${disp.name}: not scraped inline (JARS = jars-lists.js + merge). See run-flower-daily.js.`);
+    return [];
+  }
   console.log(`(skipping ${disp.name}: unknown platform "${disp.platform}")`);
   return [];
 }
@@ -995,6 +1069,20 @@ function printTable(ranked, dropped, opts) {
       if (bestSativa.url) console.log(`             ${bestSativa.url}`);
     }
     console.log(`\n★ = pure sativa   ✓ = discount verified vs struck MSRP   ⚠ = advertised deal we could NOT verify`);
+  }
+
+  // --why <regex>: trace a specific product through the filter.
+  if (opts.why) {
+    const re = new RegExp(opts.why, 'i');
+    const hits = [
+      ...ranked.filter((r) => re.test(r.name || '')).map((r) => ({ r, reason: 'KEPT' })),
+      ...dropped.filter((d) => re.test(d.r.name || '')),
+    ];
+    console.log(`\n--why /${opts.why}/: ${hits.length} scraped listing(s) matched`);
+    for (const d of hits) {
+      console.log(`   ${d.reason === 'KEPT' ? '✓' : '✗'} ${d.r.name} @ ${d.r.dispensary} [${d.r.weightLabel || '?'} ${d.r.charged ?? '?'} thc=${d.r.thc} ${d.r.strainLabel}] — ${d.reason}`);
+      if (d.reason !== 'KEPT') console.log(`       raw: ${String(d.r.rawText || '').slice(0, 400)}`);
+    }
   }
 
   // Show a few notable near-misses so the filter is auditable.
@@ -1108,6 +1196,14 @@ function selftest() {
   check('r2 hybrid bucket', r2.strainBucket === 'hybrid');
   check('r2 no deal claim', r2.dealReal === null);
 
+  // normalize: single-option card with price+weight on one line (Tucson Saints)
+  const rTw = normalizeListing({
+    dispensary: 'T', name: 'Pre-Ground: Timewreck 14g', weightText: '1/2 oz', priceText: '$25.00 - 1/2 oz',
+    blob: 'Pre-Ground: Timewreck 14g | SAINTS | Sativa | THC: 30.76% | $25.00 - 1/2 oz',
+  });
+  check('"$25.00 - 1/2 oz" parses: $/g = 25/14', approx(rTw.pricePerGram, 25 / 14), rTw.pricePerGram);
+  check('"$30 Half Ounces" promo is NOT a price', parsePrices('$30 Half Ounces').length === 0);
+
   // normalize: fake deal (%off with no struck price)
   const r3 = normalizeListing({
     dispensary: 'T', name: 'AVENUE PINK CERTZ', brand: 'AVENUE',
@@ -1207,12 +1303,28 @@ async function main() {
     const n = all.filter((r) => r.inferred).length;
     console.log(`Total sativa-leaning listings rescued from hybrid/unknown: ${n} (≈). Use --strict-lineage for menu labels only.`);
   }
-  const { kept, dropped } = applyFilters(all, opts);
+  const deduped = dedupeListings(all);
+  if (deduped.length !== all.length) {
+    console.log(`De-duplicated ${all.length - deduped.length} repeated product row(s) (same store+URL+weight).`);
+  }
+  const { kept, dropped } = applyFilters(deduped, opts);
   const ranked = rankListings(kept, opts.preferSativa);
 
   printTable(ranked, dropped, opts);
   if (opts.jsonOut) writeJson(opts.jsonOut, ranked, dropped, opts);
   if (opts.csvOut) writeCsv(opts.csvOut, ranked);
+
+  // Loud reminder: this tool is Dutchie-only. JARS is intentionally NOT scraped
+  // here (the inline geo-switch is unreliable — see scrapeDispensary). If JARS
+  // stores were in the list, tell the user this board is INCOMPLETE on its own.
+  // Silent under run-flower-daily.js, which pulls JARS live and merges it next.
+  if (!process.env.FLOWER_PIPELINE && dispensaries.some((d) => d.platform === 'jars')) {
+    console.log(`\n${'─'.repeat(92)}`);
+    console.log('⚠  DUTCHIE-ONLY RESULTS — JARS is NOT included in this run.');
+    console.log('   JARS (East Tucson + Green Valley) is pulled live by jars-lists.js and merged in.');
+    console.log('   For the COMPLETE board incl. JARS, run:  node run-flower-daily.js');
+    console.log(`${'─'.repeat(92)}`);
+  }
 }
 
 if (require.main === module) {
@@ -1227,5 +1339,5 @@ module.exports = {
   parsePrices, inferSativaLean, applyLeanInference, classifyLeafly, cleanStrainName,
   // shared plumbing reused by sibling finders (e.g. preroll-value-finder.js)
   makeContext, gotoAndSettle, autoScroll, DUTCHIE_HARVEST, resolveLeanViaLeafly,
-  BUCKET_LABEL, BUCKET_RANK, DISPENSARIES,
+  scrapeJars, BUCKET_LABEL, BUCKET_RANK, DISPENSARIES,
 };
