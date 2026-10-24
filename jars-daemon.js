@@ -29,6 +29,14 @@ const READY = path.join(__dirname, `.jars-daemon-ready-${PORT}`);
   for (const f of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
     try { fs.rmSync(path.join(PROFILE_DIR, f), { force: true }); } catch (_) {}
   }
+  // Keep the profile from ballooning. These caches regenerate and were ~0.5 GB
+  // (V8 Code Cache + HTTP Cache). Cookies / Local Storage / Preferences — the
+  // store selection, age-gate and medical mode — live elsewhere and are kept.
+  // The daemon is long-lived (reused across runs), so this clears rarely and the
+  // recompile cost is negligible.
+  for (const rel of ['Default/Cache', 'Default/Code Cache', 'Default/GPUCache', 'GrShaderCache']) {
+    try { fs.rmSync(path.join(PROFILE_DIR, rel), { recursive: true, force: true }); } catch (_) {}
+  }
   const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
     channel: 'chrome',
     headless: false,
