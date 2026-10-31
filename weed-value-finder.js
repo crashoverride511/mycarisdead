@@ -843,7 +843,7 @@ async function jarsPickStore(page, matchToken, mode) {
       return false;
     },
     { matchToken, mode }
-  );
+  ).catch(() => false); // the click can navigate mid-evaluate; that's not a failure to crash on
 }
 
 // Type into a JARS search box in a React-safe way (native setter + input event),
@@ -862,7 +862,29 @@ async function jarsFillSearch(page, placeholderSub, value) {
       return true;
     },
     { placeholderSub, value }
-  );
+  ).catch(() => false);
+}
+
+// Open the flower menu WITHOUT a hard page load when possible. Confirmed live:
+// a fresh page.goto('/category/flower') makes JARS re-resolve the store from
+// IP geolocation and throws away the store you just picked (it came back as
+// jars-ann-arbor right after "store confirmed" for Green Valley). Clicking the
+// site's own Flower link keeps the in-session store selection, so try that
+// first and only fall back to a hard load if there's no link on the page.
+async function jarsOpenFlowerMenu(page) {
+  const clicked = await page.evaluate(() => {
+    const a = document.querySelector('a[href*="/category/flower"]');
+    if (!a) return false;
+    a.click();
+    return true;
+  }).catch(() => false);
+  if (clicked) {
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+    await page.waitForTimeout(2500);
+  } else {
+    await gotoAndSettle(page, 'https://jarscannabis.com/category/flower');
+    await page.waitForTimeout(2000);
+  }
 }
 
 // Wait for the user to manually pick their store in the visible browser window.
@@ -891,11 +913,9 @@ async function jarsWaitForManualStore(page, wantSlug, matchToken, timeoutMs = 24
       // matching does not mean the menu you're about to scrape matches. That
       // produced exactly this sequence once before: "store confirmed:
       // jars-green-valley..." immediately followed by the real menu load
-      // coming back as jars-ann-arbor. Reload the actual menu page and
-      // re-check before ever declaring success, instead of trusting the
-      // picker alone.
-      await gotoAndSettle(page, 'https://jarscannabis.com/category/flower');
-      await page.waitForTimeout(1500);
+      // coming back as jars-ann-arbor. Open the actual menu and re-check
+      // before ever declaring success, instead of trusting the picker alone.
+      await jarsOpenFlowerMenu(page);
       const verified = await jarsActiveShopSlug(page);
       if (matches(verified)) {
         console.log(`   ✓ store confirmed and menu verified: ${verified}\n`);
@@ -989,17 +1009,22 @@ async function scrapeJars(context, disp, opts) {
       slug = await jarsActiveShopSlug(page);
     }
 
-    // --- Manual confirm: let the user pick the store by hand in the window ---
+    // Open the real menu FIRST, then judge the store from that. The picker
+    // paths above can look right (a /shop/<slug> page trivially links to its
+    // own slug) and still hand back a different store's menu — so deciding
+    // whether to ask for a manual pick before loading the menu skipped the
+    // manual step exactly when it was needed (East Tucson, live).
     const tokenSlug = (disp.match || '').toLowerCase().replace(/\s+/g, '-');
     const matches = (s) => s && (s === wantSlug || (tokenSlug && s.includes(tokenSlug)));
+    await jarsOpenFlowerMenu(page);
+    slug = await jarsActiveShopSlug(page);
+
+    // --- Manual confirm: let the user pick the store by hand in the window ---
     if (!matches(slug) && opts.jarsManual && opts.headed) {
       const got = await jarsWaitForManualStore(page, wantSlug, disp.match);
       if (got) slug = got;
     }
 
-    // Load the menu and verify the ACTIVE store slug matches the target.
-    await gotoAndSettle(page, 'https://jarscannabis.com/category/flower');
-    await page.waitForTimeout(2000);
     await autoScroll(page, () => document.querySelectorAll('a[href*="/product/"]').length, { maxRounds: 30 });
     slug = await jarsActiveShopSlug(page);
 
