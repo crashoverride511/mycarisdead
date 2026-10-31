@@ -871,6 +871,7 @@ async function jarsFillSearch(page, placeholderSub, value) {
 // is how we get JARS from a non-AZ machine: you confirm the location by hand.
 async function jarsWaitForManualStore(page, wantSlug, matchToken, timeoutMs = 240000) {
   const tokenSlug = (matchToken || '').toLowerCase().replace(/\s+/g, '-');
+  const matches = (s) => s && (s === wantSlug || (tokenSlug && s.includes(tokenSlug)));
   console.log('\n   ┌─ JARS manual confirm ─────────────────────────────────────────');
   console.log('   │ A browser window is open. In it:');
   console.log('   │   1) Click "Enter Site" (age gate)');
@@ -883,9 +884,25 @@ async function jarsWaitForManualStore(page, wantSlug, matchToken, timeoutMs = 24
   while (Date.now() < deadline) {
     const slug = await jarsActiveShopSlug(page);
     if (slug && slug !== last) { console.log(`   …current store: ${slug}`); last = slug; }
-    if (slug && (slug === wantSlug || (tokenSlug && slug.includes(tokenSlug)))) {
-      console.log(`   ✓ store confirmed: ${slug}\n`);
-      return slug;
+    if (matches(slug)) {
+      // Confirmed live: the store picker can show the right store (its own
+      // "/shop/<slug>" links on the page) while JARS still serves a DIFFERENT
+      // store's menu server-side, resolved from IP geolocation — the picker
+      // matching does not mean the menu you're about to scrape matches. That
+      // produced exactly this sequence once before: "store confirmed:
+      // jars-green-valley..." immediately followed by the real menu load
+      // coming back as jars-ann-arbor. Reload the actual menu page and
+      // re-check before ever declaring success, instead of trusting the
+      // picker alone.
+      await gotoAndSettle(page, 'https://jarscannabis.com/category/flower');
+      await page.waitForTimeout(1500);
+      const verified = await jarsActiveShopSlug(page);
+      if (matches(verified)) {
+        console.log(`   ✓ store confirmed and menu verified: ${verified}\n`);
+        return verified;
+      }
+      console.log(`   ⚠ picker showed "${slug}" but the menu still resolves to "${verified || 'unknown'}" — that's JARS overriding your selection by IP geolocation, not a UI glitch. Keep waiting, or double-check you're really on an AZ connection with no VPN.`);
+      last = ''; // let the next slug change (even back to the same one) log again
     }
     await page.waitForTimeout(2500);
   }
