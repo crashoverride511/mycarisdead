@@ -4,7 +4,7 @@
   "description": "",
   "main": "amazon-coupon-finder.js",
   "scripts": {
-    "test": "node weed-value-finder.js --selftest && node preroll-value-finder.js --selftest",
+    "test": "node weed-value-finder.js --selftest && node preroll-value-finder.js --selftest && node distance.js --selftest",
     "weed": "node weed-value-finder.js --headless --json weed-scraped.json && node build-report.js",
     "weed:report": "node build-report.js",
     "weed:jars": "node weed-value-finder.js --only jars-east-tucson,jars-green-valley --jars-manual",

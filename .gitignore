@@ -14,3 +14,7 @@ preroll-best-value.csv
 preroll-best-value.xlsx
 preroll-best-value.html
 strain-cache.json
+
+# Your home location (repo is public) + cached drive times. See home.example.json.
+home.json
+distance-cache.json

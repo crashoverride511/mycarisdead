@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
 const m = require('./weed-value-finder.js');
+const dist = require('./distance.js');
 
 const SCRAPE = 'weed-scraped.json';
 if (!fs.existsSync(SCRAPE)) {
@@ -54,33 +55,69 @@ for (const d of manualRecs.filter((r) => !keptManual.includes(r))) {
 
 const ranked = m.rankListings(scraped.concat(keptManual), Boolean(opts.preferSativa));
 const generatedAt = base.generatedAt || new Date().toISOString();
+const storeCount = new Set(ranked.map((r) => r.dispensaryId || r.dispensary)).size;
 
-// --- weed-best-value.json (final merged, for reference / the HTML/xlsx read from memory) ---
-fs.writeFileSync('weed-best-value.json', JSON.stringify({ opts, generatedAt, count: ranked.length, results: ranked, jarsManualAdded: keptManual.length }, null, 2));
+(async () => {
+  // --- Drive distance from home.json (optional; see distance.js) ---
+  const home = dist.loadHome();
+  let geo = null;
+  if (home) {
+    const drives = await dist.storeDrives(home, m.DISPENSARIES);
+    geo = dist.applyDistance(ranked, drives, home);
+  }
 
-// --- CSV ---
-const cols = ['pricePerGram', 'charged', 'original', 'discountPct', 'dealReal', 'grams', 'weightLabel', 'thc', 'strainLabel', 'dispensary', 'brand', 'name', 'url'];
-const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-fs.writeFileSync('weed-best-value.csv', [cols.join(',')].concat(ranked.map((r) => cols.map((c) => esc(r[c])).join(','))).join('\n'));
+  // --- weed-best-value.json (final merged, for reference / the HTML/xlsx read from memory) ---
+  fs.writeFileSync('weed-best-value.json', JSON.stringify({ opts, generatedAt, count: ranked.length, results: ranked, jarsManualAdded: keptManual.length }, null, 2));
 
-// --- HTML (phone page) ---
-fs.writeFileSync('weed-best-value.html', buildHtml(ranked, generatedAt));
+  // --- CSV ---
+  const cols = ['pricePerGram', 'charged', 'original', 'discountPct', 'dealReal', 'grams', 'weightLabel', 'thc', 'strainLabel', 'dispensary', 'driveMin', 'miles', 'near', 'worthDrive', 'brand', 'name', 'url'];
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  fs.writeFileSync('weed-best-value.csv', [cols.join(',')].concat(ranked.map((r) => cols.map((c) => esc(r[c])).join(','))).join('\n'));
 
-// --- XLSX (async, last) ---
-buildXlsx(ranked).then(() => {
-  const jrank = ranked.findIndex((r) => r.manual);
+  // --- HTML (phone page) ---
+  fs.writeFileSync('weed-best-value.html', buildHtml(ranked, generatedAt, home, geo, storeCount));
+
+  // --- XLSX ---
+  await buildXlsx(ranked, Boolean(home));
+
   console.log(`Report built: ${ranked.length} picks (${keptManual.length} hand-entered JARS).`);
+  const jrank = ranked.findIndex((r) => r.manual);
   if (jrank >= 0) {
     const j = ranked[jrank];
     console.log(`  JARS "${j.name}" ranks #${jrank + 1} at $${j.pricePerGram.toFixed(2)}/g ($${Math.round(j.pricePerGram * 28)}/oz).`);
   }
+  if (geo) printDistanceSummary(ranked, home, geo);
+  else console.log('  (no home.json — copy home.example.json to home.json for drive-time ranking)');
   console.log('  -> weed-best-value.csv / .xlsx / .html');
-});
+})();
+
+function printDistanceSummary(ranked, home, geo) {
+  const money = (n) => `$${n.toFixed(2)}`;
+  const drv = (r) => (r.driveMin == null ? '' : `${r.driveApprox ? '~' : ''}${r.driveMin} min`);
+  const nearN = ranked.filter((r) => r.near).length;
+  console.log(`\n  From ${home.label} — normal run = stores ≤ ${geo.nearMinutes} min (${nearN} picks):`);
+  if (geo.nearBest) {
+    const b = geo.nearBest;
+    console.log(`    Best nearby:  ${money(b.pricePerGram)}/g — ${b.name} @ ${b.dispensary} (${drv(b)})`);
+  }
+  if (geo.worth.length) {
+    console.log(`    Worth the drive (beats nearby by ≥ ${money(geo.farPremium)}/g):`);
+    for (const r of geo.worth.slice(0, 5)) {
+      console.log(`      ${money(r.pricePerGram)}/g — ${r.name} @ ${r.dispensary} (${drv(r)}, saves ${money(r.savesPerGram)}/g)`);
+    }
+  } else {
+    const f = geo.farHidden[0];
+    console.log(`    Nothing farther out beats that by ≥ ${money(geo.farPremium)}/g.` +
+      (f && geo.nearBest && f.pricePerGram < geo.nearBest.pricePerGram
+        ? ` Closest call: ${money(f.pricePerGram)}/g ${f.name} @ ${f.dispensary} (${drv(f)}, only ${money(geo.nearBest.pricePerGram - f.pricePerGram)}/g less).`
+        : ''));
+  }
+}
 
 // ===========================================================================
 // HTML
 // ===========================================================================
-function buildHtml(rows0, generatedAtISO) {
+function buildHtml(rows0, generatedAtISO, home, geo, storeCount) {
   const genStr = new Date(generatedAtISO).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Phoenix' }) + ' MST';
   const escape = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const shortDisp = (s) => s.replace(' Dispensary', '').replace(' (Tucson)', '').replace('Trulieve / Harvest of Tucson', 'Trulieve/Harvest');
@@ -89,6 +126,8 @@ function buildHtml(rows0, generatedAtISO) {
     wt: x.weightLabel || '?', thc: x.thc, bucket: x.strainBucket, inf: !!x.inferred, manual: !!x.manual,
     deal: x.dealReal, disc: x.discountPct, disp: x.dispensary, brand: x.brand || '', name: x.name, url: x.url || '',
     note: (x.notes || []).find((n) => /BOGO|effective/i.test(n)) || '',
+    drive: x.driveMin == null ? null : `${x.driveApprox ? '~' : ''}${x.driveMin} min`,
+    near: x.near !== false, worth: !!x.worthDrive, saves: x.savesPerGram,
   }));
   const card = (r) => {
     const mark = r.manual ? { t: 'J', cls: 'jars' } : r.bucket === 'sativa' ? { t: '★', cls: 'sativa' } : r.inf ? { t: '≈', cls: 'inf' } : { t: '', cls: '' };
@@ -96,12 +135,14 @@ function buildHtml(rows0, generatedAtISO) {
     const lineageNote = r.manual ? 'JARS · by hand' : r.inf ? 'inferred' : 'menu-labeled';
     const dealChip = r.deal === true ? `<span class="chip deal">✓ ${r.disc}% off</span>` : r.deal === false ? `<span class="chip warn">⚠ unverified</span>` : '';
     const bogo = r.note ? `<span class="chip bogo">BOGO ≈$1.43/g</span>` : '';
-    return `<article class="card${r.manual ? ' is-jars' : ''}" data-ppg="${r.ppg}" data-thc="${r.thc}" data-pure="${r.bucket === 'sativa' ? 1 : 0}" data-deal="${r.deal === true ? 1 : 0}">
+    const drive = r.drive ? `<span class="chip drive${r.near ? '' : ' far'}">🚗 ${escape(r.drive)}</span>` : '';
+    const worth = r.worth ? `<span class="chip worth">worth the drive${r.saves != null ? ` · saves $${r.saves.toFixed(2)}/g` : ''}</span>` : '';
+    return `<article class="card${r.manual ? ' is-jars' : ''}${r.worth ? ' is-worth' : ''}" data-ppg="${r.ppg}" data-thc="${r.thc}" data-pure="${r.bucket === 'sativa' ? 1 : 0}" data-deal="${r.deal === true ? 1 : 0}" data-near="${r.near || r.worth ? 1 : 0}">
   <div class="rank"><span class="mk ${mark.cls}">${mark.t}</span><span class="num">${r.rank}</span></div>
   <div class="body">
     <div class="prod">${escape(r.brand ? r.brand + ' · ' : '')}${escape(r.name)}</div>
     <div class="line2"><span class="thc">${r.thc}%</span><span class="lin ${mark.cls}">${lineage}<small>${lineageNote}</small></span><span class="disp">${escape(shortDisp(r.disp))}</span></div>
-    <div class="chips">${dealChip}${bogo}<span class="chip qty">${escape(r.wt)} · $${r.price}</span></div>
+    <div class="chips">${worth}${dealChip}${bogo}<span class="chip qty">${escape(r.wt)} · $${r.price}</span>${drive}</div>
   </div>
   <div class="price"><div class="ppg"><span class="cur">$</span>${r.ppg.toFixed(2)}<span class="per">/g</span></div><div class="oz">$${r.oz}/oz</div>${r.url ? `<a class="go" href="${escape(r.url)}" target="_blank" rel="noopener">open ↗</a>` : ''}</div>
 </article>`;
@@ -149,6 +190,12 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 .chip.bogo{background:color-mix(in srgb,var(--gold) 20%,transparent);color:var(--gold)}
 .chip.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
 .chip.qty{background:var(--surface2);color:var(--muted);font-weight:600}
+.chip.drive{background:var(--surface2);color:var(--muted);font-weight:600}
+.chip.drive.far{color:var(--warn)}
+.chip.worth{background:color-mix(in srgb,var(--teal) 18%,transparent);color:var(--teal)}
+.card.is-worth{border-color:color-mix(in srgb,var(--teal) 55%,var(--line))}
+.scope{margin-left:auto}
+.scope + .sort{margin-left:0}
 .price{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px;text-align:right}
 .ppg{font-size:22px;font-weight:800;letter-spacing:-.03em;line-height:1;white-space:nowrap}
 .ppg .cur{font-size:14px;font-weight:700;vertical-align:top;margin-right:-1px}
@@ -167,12 +214,13 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 <div class="wrap">
 <header>
   <div class="h-top"><h1>Tucson Flower<small>best value · $ / gram</small></h1><span class="gen">updated<br>${genStr}</span></div>
-  <p class="criteria">Sativa &amp; sativa-leaning · THC <b>≥27%</b> · ranked by what you actually pay. <b>10 dispensaries.</b></p>
+  <p class="criteria">Sativa &amp; sativa-leaning · THC <b>≥27%</b> · ranked by what you actually pay. Picks from <b>${storeCount} stores.</b>${home ? ` Near me = <b>≤${geo.nearMinutes} min</b> from ${escape(home.label)}.` : ''}</p>
   <div class="controls">
     <button class="chipbtn" data-filter="all" aria-pressed="true">All</button>
     <button class="chipbtn" data-filter="pure">★ Pure sativa</button>
     <button class="chipbtn" data-filter="under6">≤ $6/g</button>
     <button class="chipbtn" data-filter="deal">On deal</button>
+    ${home ? '<button class="chipbtn scope" data-scope="near" aria-pressed="true">Near me</button>' : ''}
     <button class="chipbtn sort" data-sort="ppg" aria-pressed="true">Sort: $/g</button>
   </div>
 </header>
@@ -182,15 +230,17 @@ ${rows.map(card).join('\n')}
 </div>
 <div class="empty" id="empty" hidden>Nothing matches that filter.</div>
 <div class="legend"><span><b style="color:var(--gold)">★</b> menu pure sativa</span><span><b style="color:var(--teal)">≈</b> lineage inferred</span><span><b style="color:var(--amber)">J</b> JARS (by hand)</span></div>
+${home ? `<p class="note"><b>Distance:</b> drive times from ${escape(home.label)} (no traffic, OpenStreetMap routing). “Near me” shows stores within ${geo.nearMinutes} min, plus any farther deal that beats your best nearby $/g by at least $${geo.farPremium.toFixed(2)}/g (tagged <i>worth the drive</i>). Tap “Near me” to see every store.</p>` : ''}
 <p class="note"><b>Reading it:</b> $/g is the price you pay (sale ÷ grams); $/oz is the 28g equivalent so sizes compare fairly. Deals are recomputed against the struck price — ✓ verified, ⚠ couldn't verify. JARS locks its menu to your location so it can't be auto-pulled here; JARS picks were entered by hand. Snapshot from the update time — reconfirm in-store.</p>
 </div>
 <script>
 (function(){
   var list=document.getElementById('list'),cards=[].slice.call(list.children);
   var count=document.getElementById('count'),empty=document.getElementById('empty');
-  var filter='all',sort='ppg';
+  var filter='all',sort='ppg',scope=document.querySelector('[data-scope]')?'near':'all';
   function apply(){
     var vis=cards.filter(function(c){
+      if(scope==='near'&&c.dataset.near!=='1')return false;
       if(filter==='pure')return c.dataset.pure==='1';
       if(filter==='under6')return parseFloat(c.dataset.ppg)<=6;
       if(filter==='deal')return c.dataset.deal==='1';
@@ -201,11 +251,13 @@ ${rows.map(card).join('\n')}
       return parseFloat(a.dataset.ppg)-parseFloat(b.dataset.ppg);
     });
     cards.forEach(function(c){c.style.display='none';});
-    vis.forEach(function(c){c.style.display='';list.appendChild(c);});
-    count.textContent=vis.length+' of '+cards.length+' picks · '+(sort==='thc'?'highest THC first':'cheapest first');
+    vis.forEach(function(c,i){c.style.display='';c.querySelector('.num').textContent=i+1;list.appendChild(c);});
+    count.textContent=vis.length+' of '+cards.length+' picks · '+(scope==='near'?'near me · ':'all stores · ')+(sort==='thc'?'highest THC first':'cheapest first');
     empty.hidden=vis.length>0;
   }
   document.querySelectorAll('[data-filter]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-filter]').forEach(function(x){x.setAttribute('aria-pressed','false');});b.setAttribute('aria-pressed','true');filter=b.dataset.filter;apply();});});
+  var scb=document.querySelector('[data-scope]');
+  if(scb)scb.addEventListener('click',function(){scope=scope==='near'?'all':'near';scb.textContent=scope==='near'?'Near me':'All stores';scb.setAttribute('aria-pressed',scope==='near'?'true':'false');apply();});
   var sb=document.querySelector('[data-sort]');
   sb.addEventListener('click',function(){sort=sort==='ppg'?'thc':'ppg';sb.textContent='Sort: '+(sort==='ppg'?'$/g':'THC');apply();});
   apply();
@@ -216,24 +268,27 @@ ${rows.map(card).join('\n')}
 // ===========================================================================
 // XLSX
 // ===========================================================================
-async function buildXlsx(ranked) {
+async function buildXlsx(ranked, withDistance) {
   const A = 'Arial';
+  const NC = 17; // column count
   const wb = new ExcelJS.Workbook();
   const box = () => { const s = { style: 'thin', color: { argb: 'FFCFD8D5' } }; return { top: s, left: s, right: s, bottom: s }; };
+  const run = (r) => (!withDistance || r.driveMin == null ? '' : r.near ? 'near' : r.worthDrive ? 'worth the drive' : 'far');
   const ws = wb.addWorksheet('Best Value Flower', { views: [{ state: 'frozen', ySplit: 4 }] });
-  ws.mergeCells('A1:N1');
+  ws.mergeCells('A1:Q1');
   ws.getCell('A1').value = 'Tucson Best-Value Flower  —  Sativa & Sativa-Leaning, THC ≥ 27%';
   ws.getCell('A1').font = { name: A, size: 15, bold: true, color: { argb: 'FFFFFFFF' } };
   ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3864' } };
   ws.getCell('A1').alignment = { vertical: 'middle', indent: 1 };
   ws.getRow(1).height = 30;
-  ws.mergeCells('A2:N2');
-  ws.getCell('A2').value = '★ menu pure sativa   ≈ inferred sativa-lean   ✓ verified deal   ⚠ unverifiable   J = JARS (by hand)   |   $/oz = 28g equivalent';
+  ws.mergeCells('A2:Q2');
+  ws.getCell('A2').value = '★ menu pure sativa   ≈ inferred sativa-lean   ✓ verified deal   ⚠ unverifiable   J = JARS (by hand)   |   $/oz = 28g equivalent' +
+    (withDistance ? '   |   Drive = minutes from home (no traffic); Run = near / worth the drive / far' : '');
   ws.getCell('A2').font = { name: A, size: 9, italic: true, color: { argb: 'FF555555' } };
   ws.getCell('A2').alignment = { vertical: 'middle', indent: 1 };
   const HDR = 4;
-  const cols2 = ['Rank', '$/g', '$/oz (eq)', 'Price', 'Weight', 'THC', 'Lineage', 'Source', 'Deal', 'Dispensary', 'Brand', 'Product', 'Note', 'Link'];
-  const widths = [6, 9, 11, 10, 9, 8, 24, 26, 14, 24, 16, 40, 20, 10];
+  const cols2 = ['Rank', '$/g', '$/oz (eq)', 'Price', 'Weight', 'THC', 'Lineage', 'Source', 'Deal', 'Dispensary', 'Drive (min)', 'Miles', 'Run', 'Brand', 'Product', 'Note', 'Link'];
+  const widths = [6, 9, 11, 10, 9, 8, 24, 26, 14, 24, 9, 8, 15, 16, 40, 20, 10];
   cols2.forEach((n, i) => {
     const c = ws.getRow(HDR).getCell(i + 1); c.value = n;
     c.font = { name: A, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -259,31 +314,35 @@ async function buildXlsx(ranked) {
     row.getCell(8).value = source(r);
     row.getCell(9).value = deal(r);
     row.getCell(10).value = r.dispensary;
-    row.getCell(11).value = r.brand;
-    row.getCell(12).value = r.name;
-    row.getCell(13).value = note;
-    if (r.url) { row.getCell(14).value = { text: 'open', hyperlink: r.url }; row.getCell(14).font = { name: A, size: 10, color: { argb: 'FF1155CC' }, underline: true }; }
-    for (let c = 1; c <= 14; c++) {
+    row.getCell(11).value = withDistance ? r.driveMin : null;
+    row.getCell(12).value = withDistance ? r.miles : null; row.getCell(12).numFmt = '0.0';
+    row.getCell(13).value = run(r);
+    row.getCell(14).value = r.brand;
+    row.getCell(15).value = r.name;
+    row.getCell(16).value = note;
+    if (r.url) { row.getCell(17).value = { text: 'open', hyperlink: r.url }; row.getCell(17).font = { name: A, size: 10, color: { argb: 'FF1155CC' }, underline: true }; }
+    const center = (c) => c <= 6 || c === 11 || c === 12;
+    for (let c = 1; c <= NC; c++) {
       const cell = row.getCell(c);
-      if (c !== 14 || !r.url) cell.font = { name: A, size: 10, bold: i === 0 || r.manual };
+      if (c !== NC || !r.url) cell.font = { name: A, size: 10, bold: i === 0 || r.manual, color: withDistance && !r.near && !r.worthDrive ? { argb: 'FF888888' } : undefined };
       cell.border = box();
-      cell.alignment = { vertical: 'middle', horizontal: c <= 6 ? 'center' : 'left', indent: c <= 6 ? 0 : 1 };
+      cell.alignment = { vertical: 'middle', horizontal: center(c) ? 'center' : 'left', indent: center(c) ? 0 : 1 };
     }
-    const fill = r.manual ? 'FFFFE8C2' : r.strainBucket === 'sativa' ? 'FFFFF6D6' : i % 2 ? 'FFEAF2EF' : null;
-    if (fill) for (let c = 1; c <= 14; c++) row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+    const fill = r.manual ? 'FFFFE8C2' : r.worthDrive ? 'FFDDF3EF' : r.strainBucket === 'sativa' ? 'FFFFF6D6' : i % 2 ? 'FFEAF2EF' : null;
+    if (fill) for (let c = 1; c <= NC; c++) row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
     row.height = 15;
   });
-  ws.autoFilter = { from: { row: HDR, column: 1 }, to: { row: HDR, column: 14 } };
+  ws.autoFilter = { from: { row: HDR, column: 1 }, to: { row: HDR, column: NC } };
 
   // Sheet 2: cheapest per dispensary
   const ws2 = wb.addWorksheet('By Dispensary', { views: [{ state: 'frozen', ySplit: 3 }] });
-  ws2.mergeCells('A1:E1');
+  ws2.mergeCells('A1:F1');
   ws2.getCell('A1').value = 'Cheapest qualifying $/g at each dispensary';
   ws2.getCell('A1').font = { name: A, size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
   ws2.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3864' } };
   ws2.getCell('A1').alignment = { vertical: 'middle', indent: 1 };
   ws2.getRow(1).height = 24;
-  ['Dispensary', 'Best $/g', '$/oz (eq)', 'Product', 'THC'].forEach((n, i) => {
+  ['Dispensary', 'Best $/g', '$/oz (eq)', 'Product', 'THC', 'Drive (min)'].forEach((n, i) => {
     const c = ws2.getRow(3).getCell(i + 1); c.value = n;
     c.font = { name: A, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
     c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E5D50' } };
@@ -292,7 +351,7 @@ async function buildXlsx(ranked) {
   const best = {};
   for (const r of ranked) if (!best[r.dispensary] || r.pricePerGram < best[r.dispensary].pricePerGram) best[r.dispensary] = r;
   const order = Object.values(best).sort((a, b) => a.pricePerGram - b.pricePerGram);
-  [26, 10, 12, 46, 8].forEach((w, i) => (ws2.getColumn(i + 1).width = w));
+  [26, 10, 12, 46, 8, 11].forEach((w, i) => (ws2.getColumn(i + 1).width = w));
   order.forEach((r, i) => {
     const rr = 4 + i, row = ws2.getRow(rr);
     row.getCell(1).value = r.dispensary;
@@ -300,7 +359,8 @@ async function buildXlsx(ranked) {
     row.getCell(3).value = { formula: `B${rr}*28` }; row.getCell(3).numFmt = '$#,##0';
     row.getCell(4).value = `${r.brand} — ${r.name}`;
     row.getCell(5).value = r.thc; row.getCell(5).numFmt = '0.0"%"';
-    for (let c = 1; c <= 5; c++) { const cell = row.getCell(c); cell.font = { name: A, size: 10 }; cell.border = box(); cell.alignment = { vertical: 'middle', horizontal: c === 1 || c === 4 ? 'left' : 'center', indent: c === 1 || c === 4 ? 1 : 0 }; }
+    row.getCell(6).value = withDistance ? r.driveMin : null;
+    for (let c = 1; c <= 6; c++) { const cell = row.getCell(c); cell.font = { name: A, size: 10 }; cell.border = box(); cell.alignment = { vertical: 'middle', horizontal: c === 1 || c === 4 ? 'left' : 'center', indent: c === 1 || c === 4 ? 1 : 0 }; }
   });
 
   await wb.xlsx.writeFile('weed-best-value.xlsx');

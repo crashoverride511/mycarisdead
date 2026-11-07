@@ -97,19 +97,22 @@ try { ({ chromium } = require('playwright')); } catch (_) { /* only needed for l
 //                         name as shown in the picker) and `mode` (rec|med).
 //
 // `verify:true` = slug is a best guess; confirm it or the tool will skip it.
+// `lat`/`lng`/`address` = the store's location (from its Dutchie listing, or a
+// geocoded street address for JARS) — used for drive distance from home.json.
 const DISPENSARIES = [
   // --- CONFIRMED Tucson-area Dutchie menus (live-verified: slug resolves,
   //     product cards load). These run by default. ---
-  { id: 'earths-healing-south', name: "Earth's Healing South", platform: 'dutchie', slug: 'earths-healing-south', menuType: 'rec' },
-  { id: 'earths-healing-north', name: "Earth's Healing North", platform: 'dutchie', slug: 'earths-healing-north', menuType: 'rec' },
-  { id: 'd2-eastside', name: 'D2 Dispensary (Eastside)', platform: 'dutchie', slug: 'd2-dispensary', menuType: 'rec' },
-  { id: 'd2-downtown', name: 'D2 Dispensary (Downtown)', platform: 'dutchie', slug: 'the-downtown-dispensary', menuType: 'rec' },
-  { id: 'botanica', name: 'Botanica', platform: 'dutchie', slug: 'botanica', menuType: 'rec' },
-  { id: 'trulieve-tucson', name: 'Trulieve / Harvest of Tucson', platform: 'dutchie', slug: 'harvest-of-tucson', menuType: 'rec' },
-  { id: 'nature-med', name: 'Nature Med (Tucson)', platform: 'dutchie', slug: 'nature-med-tucson', menuType: 'rec' },
-  { id: 'the-flower-shop', name: 'The Flower Shop', platform: 'dutchie', slug: 'the-flower-shop', menuType: 'rec' },
-  { id: 'tucson-saints', name: 'Tucson Saints', platform: 'dutchie', slug: 'tucson-saints', menuType: 'rec' },
-  { id: 'green-halo', name: 'Green Halo (Halo Cannabis)', platform: 'dutchie', slug: 'the-halo-blue-palo-verde', menuType: 'rec' },
+  { id: 'earths-healing-south', name: "Earth's Healing South", platform: 'dutchie', slug: 'earths-healing-south', menuType: 'rec', address: '2075 E Benson Hwy', lat: 32.1670793, lng: -110.9408607 },
+  { id: 'earths-healing-north', name: "Earth's Healing North", platform: 'dutchie', slug: 'earths-healing-north', menuType: 'rec', address: '78 W River Rd', lat: 32.2972388, lng: -110.9727843 },
+  { id: 'd2-eastside', name: 'D2 Dispensary (Eastside)', platform: 'dutchie', slug: 'd2-dispensary', menuType: 'rec', address: '7139 E 22nd St', lat: 32.2078114, lng: -110.8397069 },
+  { id: 'd2-downtown', name: 'D2 Dispensary (Downtown)', platform: 'dutchie', slug: 'the-downtown-dispensary', menuType: 'rec', address: '221 E 6th St', lat: 32.2279545, lng: -110.9681273 },
+  { id: 'botanica', name: 'Botanica', platform: 'dutchie', slug: 'botanica', menuType: 'rec', address: '6205 N Travel Center Dr', lat: 32.3195603, lng: -111.0479502 },
+  { id: 'trulieve-tucson', name: 'Trulieve / Harvest of Tucson', platform: 'dutchie', slug: 'harvest-of-tucson', menuType: 'rec', address: '2734 E Grant Rd', lat: 32.2501351, lng: -110.9312675 },
+  { id: 'nature-med', name: 'Nature Med (Tucson)', platform: 'dutchie', slug: 'nature-med-tucson', menuType: 'rec', address: '5390 W Ina Rd', lat: 32.3382175, lng: -111.0797126 },
+  // (Removed 'the-flower-shop': that Dutchie slug is a store in Chetwynd, BC, not
+  //  Tucson. The Flower Shop's AZ stores are in the Phoenix area.)
+  { id: 'tucson-saints', name: 'Tucson Saints', platform: 'dutchie', slug: 'tucson-saints', menuType: 'rec', address: '112 S Kolb Rd', lat: 32.2200686, lng: -110.8418342 },
+  { id: 'green-halo', name: 'Green Halo (Halo Cannabis)', platform: 'dutchie', slug: 'the-halo-blue-palo-verde', menuType: 'rec', address: '7710 S Wilmot Rd', lat: 32.1126559, lng: -110.8584133 },
 
   // --- JARS (Tucson + Green Valley): custom Buddi storefront over Dutchie's
   //     API — no public Dutchie slug. The adapter drives the age-gate → state
@@ -117,8 +120,8 @@ const DISPENSARIES = [
   //     non-AZ IP the site geo-defaults to another state and hides the AZ
   //     picker, so this is BEST-EFFORT: run it headed the first time to confirm
   //     it lands on the right store. Marked `verify` so it's opt-in.
-  { id: 'jars-east-tucson', name: 'JARS - East Tucson', platform: 'jars', store: 'JARS - East Tucson (Rec/Med)', match: 'East Tucson', shopSlug: 'jars-east-tucson', mode: 'rec' },
-  { id: 'jars-green-valley', name: 'JARS Green Valley', platform: 'jars', store: 'JARS Green Valley / Elevate AZ 1', match: 'Green Valley', shopSlug: 'jars-green-valley', mode: 'rec' },
+  { id: 'jars-east-tucson', name: 'JARS - East Tucson', platform: 'jars', store: 'JARS - East Tucson (Rec/Med)', match: 'East Tucson', shopSlug: 'jars-east-tucson', mode: 'rec', address: '6464 E Tanque Verde Rd', lat: 32.2444724, lng: -110.8553962 },
+  { id: 'jars-green-valley', name: 'JARS Green Valley', platform: 'jars', store: 'JARS Green Valley / Elevate AZ 1', match: 'Green Valley', shopSlug: 'jars-green-valley', mode: 'rec', address: '1732 W Commerce Point Pl, Green Valley', lat: 31.8968676, lng: -111.0028517 },
 
   // --- Add more Tucson dispensaries here. To find a store's Dutchie slug:
   //     open its website's menu, and read the dutchie.com/embedded-menu/<slug>
