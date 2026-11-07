@@ -209,9 +209,10 @@ function parseWeightGrams(text) {
 function classifyStrain(text) {
   if (!text) return 'unknown';
   const t = text.toUpperCase();
-  if (/SATIVA[\s_]*HYBRID|SATIVA[\s-]*DOM/.test(t)) return 'sativa_hybrid';
-  if (/HYBRID[\s_]*SATIVA/.test(t)) return 'sativa_hybrid';
-  if (/INDICA[\s_]*HYBRID|HYBRID[\s_]*INDICA|INDICA[\s-]*DOM/.test(t)) return 'indica_hybrid';
+  // [\s_-]: Dutchie's feed spells these "Sativa-Hybrid" / "Indica-Hybrid".
+  if (/SATIVA[\s_-]*HYBRID|SATIVA[\s-]*DOM/.test(t)) return 'sativa_hybrid';
+  if (/HYBRID[\s_-]*SATIVA/.test(t)) return 'sativa_hybrid';
+  if (/INDICA[\s_-]*HYBRID|HYBRID[\s_-]*INDICA|INDICA[\s-]*DOM/.test(t)) return 'indica_hybrid';
   if (/\bSATIVA\b/.test(t)) return 'sativa';
   if (/\bINDICA\b/.test(t)) return 'indica';
   if (/\bHYBRID\b/.test(t)) return 'hybrid';
@@ -644,38 +645,166 @@ const DUTCHIE_HARVEST = () => {
   return out;
 };
 
-async function scrapeDutchie(context, disp, opts) {
+// ---- Dutchie menu DATA FEED (preferred over DOM scraping) -----------------
+// The embedded menu renders from Dutchie's own `FilteredProducts` GraphQL
+// response. Reading that response instead of the rendered cards is far more
+// reliable: the DOM layout changes without notice (price+weight merged onto one
+// line, "SELECT WEIGHT" multi-option cards with no Add button, "Staff Pick" /
+// "Sponsored" badges sitting where the name used to be, lazy-load scrolling,
+// 100-per-page pagination) and each of those silently dropped real listings.
+// The feed gives every product on every page with exact per-option prices,
+// sale prices, THC, and finer lineage (Sativa-Hybrid / Indica-Hybrid).
+//
+// We still drive a real browser page (the feed needs the menu's own session),
+// listen for the responses, then walk ?page=2..N for the remaining pages.
+
+// Turn one Dutchie feed product into card rows (one per weight option) in the
+// same shape DUTCHIE_HARVEST produces, so normalizeListing / toPrerollRecord
+// work unchanged.
+function dutchieProductToCards(p, { slug, menuType = 'rec' } = {}) {
+  const out = [];
+  if (!p || (p.Status && p.Status !== 'Active')) return out;
+  const med = menuType === 'med';
+  const base = (med ? p.medicalPrices : p.recPrices) || p.Prices || [];
+  const special = (med ? p.medicalSpecialPrices : p.recSpecialPrices) || [];
+  const opts = (p.Options && p.Options.length ? p.Options : p.rawOptions) || [];
+  const name = (p.Name || '').trim();
+  const brand = (p.brandName || (p.brand && p.brand.name) || '').trim();
+  const strainText = p.strainType || '';
+  const pot = p.THCContent;
+  const thcVal = pot && pot.unit === 'PERCENTAGE' && pot.range && pot.range.length
+    ? Math.min(...pot.range.filter((x) => typeof x === 'number'))
+    : (typeof p.THC === 'number' ? p.THC : null);
+  const thcText = thcVal != null && isFinite(thcVal) ? `THC: ${thcVal}%` : '';
+  // Promo text for the deal checker. Products often carry several stale or
+  // overlapping special tags ("Savvy 40% OFF" + "70% OFF Savvy..."), so only
+  // use the discount(s) the store actually APPLIED to the price
+  // (POSPricingData.<rec|medical>.discounts). BOGO specials don't change the
+  // listed price, so they're noted separately.
+  const pos = p.POSPricingData && p.POSPricingData[med ? 'medical' : 'recreational'];
+  const applied = ((pos && pos.discounts) || []).map((d) => d && d.name).filter(Boolean);
+  const bogos = (((p.specialData || {}).bogoSpecials) || []).map((s) => s && s.specialName).filter(Boolean);
+  const promos = [...applied, ...bogos];
+  const url = slug && p.cName ? `https://dutchie.com/embedded-menu/${slug}/product/${p.cName}` : null;
+
+  opts.forEach((opt, i) => {
+    const reg = base[i];
+    if (typeof reg !== 'number') return;
+    const sale = special[i];
+    const prices = typeof sale === 'number' && sale > 0 && sale < reg ? [sale, reg] : [reg];
+    const priceText = prices.map((x) => `$${x.toFixed(2)}`).join(' | ');
+    const blob = [name, brand, strainText, thcText, opt, priceText, ...promos.map((s) => `special: ${s}`)]
+      .filter(Boolean).join(' | ');
+    out.push({ name, brand, strainText, thcText, weightText: String(opt), priceText, blob, url, productId: p.id || p._id });
+  });
+  return out;
+}
+
+// Load every page of a Dutchie embedded-menu category via its data feed.
+// `category` is the URL segment (flower | pre-rolls); `typeRe` matches the
+// product `type` field so carousels from other categories are ignored.
+// Returns { products, pages, error }.
+async function fetchDutchieCategory(context, disp, { category = 'flower', typeRe = /^flower$/i, retries = 3 } = {}) {
   const menuType = disp.menuType || 'rec';
-  const url = `https://dutchie.com/embedded-menu/${disp.slug}/products/flower?menuType=${menuType}`;
+  const baseUrl = `https://dutchie.com/embedded-menu/${disp.slug}/products/${category}?menuType=${menuType}`;
+  const byId = new Map();
+  let totalPages = 1;
+  let notFound = false;
+
+  const loadPage = async (pageNo) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      const page = await context.newPage();
+      let got = 0;
+      page.on('response', async (r) => {
+        if (!/operationName=FilteredProducts|"operationName":"FilteredProducts"/.test(r.url() + (r.request().postData() || ''))) return;
+        try {
+          const j = await r.json();
+          const fp = j && j.data && j.data.filteredProducts;
+          if (!fp) return;
+          const prods = (fp.products || []).filter((p) => typeRe.test(p.type || ''));
+          // The main grid is the paged query (carousels report totalPages too,
+          // but only the grid matches our category with many products).
+          if (prods.length && fp.queryInfo && fp.queryInfo.totalPages) {
+            totalPages = Math.max(totalPages, fp.queryInfo.totalPages);
+          }
+          for (const p of prods) byId.set(p.id || p._id, p);
+          got += prods.length;
+        } catch (_) { /* non-JSON or aborted */ }
+      });
+      const url = pageNo > 1 ? `${baseUrl}&page=${pageNo}` : baseUrl;
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
+      const t0 = Date.now();
+      while (!got && Date.now() - t0 < 20000) await page.waitForTimeout(500);
+      if (got) await page.waitForTimeout(1500); // let sibling responses land
+      else {
+        notFound = await page.evaluate(() =>
+          /can't find|not found|404/i.test(document.body?.innerText || '')
+        ).catch(() => false);
+      }
+      await page.close().catch(() => {});
+      if (got || notFound) return got;
+      console.log(`   page ${pageNo}: menu feed didn't load (attempt ${attempt}/${retries})${attempt < retries ? ' — retrying' : ''}`);
+    }
+    return 0;
+  };
+
+  const first = await loadPage(1);
+  if (!first) return { products: [], pages: 0, error: notFound ? 'not-found' : 'no-feed' };
+  for (let n = 2; n <= Math.min(totalPages, 20); n++) {
+    await new Promise((res) => setTimeout(res, 600 + Math.random() * 800));
+    await loadPage(n);
+  }
+  return { products: [...byId.values()], pages: totalPages, error: null };
+}
+
+// Legacy DOM-harvest path, kept as a fallback if the feed ever stops loading.
+async function scrapeDutchieDom(context, disp, category = 'flower') {
+  const menuType = disp.menuType || 'rec';
+  const url = `https://dutchie.com/embedded-menu/${disp.slug}/products/${category}?menuType=${menuType}`;
   const page = await context.newPage();
-  console.log(`\n▶ ${disp.name} (dutchie:${disp.slug})`);
   try {
     await gotoAndSettle(page, url);
-    // 404 / bad slug guard
-    const bad = await page.evaluate(() =>
-      /can't find|not found|404|no products/i.test(document.body?.innerText || '')
-    ).catch(() => false);
     await page.waitForTimeout(1200);
-    const count = await autoScroll(
+    await autoScroll(
       page,
-      () => Array.from(document.querySelectorAll('button')).filter((b) => /add .* to cart|^add\b/i.test((b.textContent || '').trim())).length
+      () => Array.from(document.querySelectorAll('button')).filter((b) => /add .* to cart|^add\b/i.test((b.textContent || '').trim())).length,
+      { pauseMs: 1500 }
     );
-    if (!count) {
-      console.log(`   no product cards found${bad ? ' (menu says not-found — slug likely wrong)' : ''} — skipping`);
-      await page.close();
+    return await page.evaluate(DUTCHIE_HARVEST);
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+// Shared by the flower + pre-roll finders: feed first, DOM fallback.
+async function scrapeDutchieCards(context, disp, { category = 'flower', typeRe = /^flower$/i } = {}) {
+  console.log(`\n▶ ${disp.name} (dutchie:${disp.slug})`);
+  try {
+    const { products, pages, error } = await fetchDutchieCategory(context, disp, { category, typeRe });
+    if (!error) {
+      const cards = products.flatMap((p) => dutchieProductToCards(p, { slug: disp.slug, menuType: disp.menuType }));
+      console.log(`   menu feed: ${products.length} product(s) over ${pages} page(s) -> ${cards.length} weight option(s)`);
+      return cards;
+    }
+    if (error === 'not-found') {
+      console.log('   menu says not-found (slug likely wrong) — skipping');
       return [];
     }
-    const cards = await page.evaluate(DUTCHIE_HARVEST);
-    console.log(`   harvested ${cards.length} card(s)`);
-    await page.close();
-    return cards.slice(0, opts.maxPerStore).map((c) =>
-      normalizeListing({ dispensary: disp.name, dispensaryId: disp.id, ...c })
-    );
+    console.log('   menu feed never loaded — falling back to page scrape');
+    const cards = await scrapeDutchieDom(context, disp, category);
+    console.log(cards.length ? `   harvested ${cards.length} card(s) (page scrape)` : '   no product cards found — skipping');
+    return cards;
   } catch (e) {
     console.log(`   error: ${e.message} — skipping`);
-    await page.close().catch(() => {});
     return [];
   }
+}
+
+async function scrapeDutchie(context, disp, opts) {
+  const cards = await scrapeDutchieCards(context, disp, { category: 'flower', typeRe: /^flower$/i });
+  return cards.slice(0, opts.maxPerStore).map((c) =>
+    normalizeListing({ dispensary: disp.name, dispensaryId: disp.id, ...c })
+  );
 }
 
 // ---- JARS custom storefront adapter ---------------------------------------
@@ -1048,6 +1177,37 @@ function selftest() {
   check('THC no space', parseThc('THC: 27.46%') === 27.46);
   check('classify SATIVA_HYBRID', classifyStrain('SATIVA_HYBRID THC : 20%') === 'sativa_hybrid');
   check('classify INDICA_HYBRID', classifyStrain('INDICA_HYBRID') === 'indica_hybrid');
+  check('classify feed "Sativa-Hybrid"', classifyStrain('Sativa-Hybrid') === 'sativa_hybrid');
+  check('classify feed "Indica-Hybrid"', classifyStrain('Indica-Hybrid') === 'indica_hybrid');
+
+  // Dutchie data feed -> cards (real shapes from the Tucson Saints feed)
+  {
+    const tw = dutchieProductToCards({
+      id: 'x1', Name: 'Pre-Ground: Timewreck 14g', brandName: 'SAINTS', strainType: 'Sativa', Status: 'Active',
+      THCContent: { unit: 'PERCENTAGE', range: [30.76] }, Options: ['1/2oz'], rawOptions: ['14.0g'],
+      recPrices: [25], recSpecialPrices: [], cName: 'pre-ground-timewreck-14g-33942', type: 'Flower',
+    }, { slug: 'tucson-saints' });
+    const r = normalizeListing({ dispensary: 'Tucson Saints', ...tw[0] });
+    check('feed: Timewreck single option -> 1 card', tw.length === 1, tw.length);
+    check('feed: Timewreck $25 / 14g = $1.79/g', approx(r.pricePerGram, 25 / 14), r.pricePerGram);
+    check('feed: Timewreck THC 30.76 sativa', r.thc === 30.76 && r.strainBucket === 'sativa', `${r.thc} ${r.strainBucket}`);
+    check('feed: Timewreck no bogus deal', !r.dealClaimed, r.dealNote);
+    check('feed: product URL', tw[0].url === 'https://dutchie.com/embedded-menu/tucson-saints/product/pre-ground-timewreck-14g-33942', tw[0].url);
+
+    const sale = dutchieProductToCards({
+      id: 'x2', Name: 'Aeriz Hella Jelly', brandName: 'Aeriz', strainType: 'Sativa-Hybrid', Status: 'Active',
+      THCContent: { unit: 'PERCENTAGE', range: [27.5] }, Options: ['1/8oz', '1/4oz'],
+      recPrices: [45, 60], recSpecialPrices: [22.5, 30], type: 'Flower',
+      specialData: { saleSpecials: [{ specialName: '50% off Aeriz' }] },
+    });
+    const s8 = normalizeListing({ dispensary: 'X', ...sale[0] });
+    const s4 = normalizeListing({ dispensary: 'X', ...sale[1] });
+    check('feed: multi-weight -> 1 card per option', sale.length === 2, sale.length);
+    check('feed: 1/4 sale $30/7g charged', s4.charged === 30 && s4.grams === 7, `${s4.charged} ${s4.grams}`);
+    check('feed: sale verified 50% vs struck', s8.dealReal === true && s8.discountPct === 50, `${s8.dealReal} ${s8.discountPct}`);
+    check('feed: Sativa-Hybrid bucket', s8.strainBucket === 'sativa_hybrid', s8.strainBucket);
+    check('feed: inactive product skipped', dutchieProductToCards({ Status: 'Inactive', Options: ['1g'], recPrices: [5] }).length === 0);
+  }
   check('classify coarse Hybrid', classifyStrain('Hybrid') === 'hybrid');
   check('classify Sativa', classifyStrain('Sativa') === 'sativa');
 
@@ -1227,5 +1387,6 @@ module.exports = {
   parsePrices, inferSativaLean, applyLeanInference, classifyLeafly, cleanStrainName,
   // shared plumbing reused by sibling finders (e.g. preroll-value-finder.js)
   makeContext, gotoAndSettle, autoScroll, DUTCHIE_HARVEST, resolveLeanViaLeafly,
+  dutchieProductToCards, fetchDutchieCategory, scrapeDutchieCards,
   BUCKET_LABEL, BUCKET_RANK, DISPENSARIES,
 };

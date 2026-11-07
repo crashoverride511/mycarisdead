@@ -161,36 +161,12 @@ function rankPrerolls(list, opts) {
 // ---------------------------------------------------------------------------
 
 async function scrapePrerolls(context, disp, opts) {
-  const menuType = disp.menuType || 'rec';
-  const url = `https://dutchie.com/embedded-menu/${disp.slug}/products/pre-rolls?menuType=${menuType}`;
-  const page = await context.newPage();
-  console.log(`\n▶ ${disp.name} (dutchie:${disp.slug})`);
-  try {
-    await m.gotoAndSettle(page, url);
-    const bad = await page.evaluate(() =>
-      /can't find|not found|404|no products/i.test(document.body?.innerText || '')
-    ).catch(() => false);
-    await page.waitForTimeout(1200);
-    const count = await m.autoScroll(
-      page,
-      () => Array.from(document.querySelectorAll('button')).filter((b) => /add .* to cart|^add\b/i.test((b.textContent || '').trim())).length
-    );
-    if (!count) {
-      console.log(`   no pre-roll cards found${bad ? ' (menu says not-found — slug likely wrong)' : ''} — skipping`);
-      await page.close();
-      return [];
-    }
-    const cards = await page.evaluate(m.DUTCHIE_HARVEST);
-    console.log(`   harvested ${cards.length} card(s)`);
-    await page.close();
-    return cards.slice(0, opts.maxPerStore).map((c) =>
-      toPrerollRecord({ dispensary: disp.name, dispensaryId: disp.id, ...c })
-    );
-  } catch (e) {
-    console.log(`   error: ${e.message} — skipping`);
-    await page.close().catch(() => {});
-    return [];
-  }
+  // Reads the menu's data feed (all pages, all weight options); falls back to
+  // the DOM harvester only if the feed never loads. See weed-value-finder.js.
+  const cards = await m.scrapeDutchieCards(context, disp, { category: 'pre-rolls', typeRe: /pre-?rolls?/i });
+  return cards.slice(0, opts.maxPerStore).map((c) =>
+    toPrerollRecord({ dispensary: disp.name, dispensaryId: disp.id, ...c })
+  );
 }
 
 // ---------------------------------------------------------------------------
