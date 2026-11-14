@@ -1,6 +1,11 @@
 const fs=require('fs');
 const cards=fs.readFileSync('artifact-cards.html','utf8');
-const now=new Date();
+// The "updated" stamp is when the DATA was scraped (generatedAt in the results
+// file), not when this page was assembled — rebuilding the page from an old
+// results file used to stamp it "updated now" and pass stale prices off as fresh.
+let dataTime=null;
+try{ const g=JSON.parse(fs.readFileSync('weed-results-merged.json','utf8')).generatedAt; if(g&&!isNaN(Date.parse(g))) dataTime=new Date(g); }catch(_){}
+const now=dataTime||new Date();
 const mst=new Date(now.getTime()-7*3600*1000);
 const stamp=mst.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true,timeZone:'UTC'});
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -18,8 +23,27 @@ try{
   }
 }catch(_){}
 
-// JARS is merged into the board like any other store — no separate callout.
-const jarsNote='';
+// Store line + warning come from the run's per-store COVERAGE record (which
+// stores were actually read), not from which stores happen to have a pick. A
+// store that failed to load is named in a warning instead of silently looking
+// like "nothing good there today". The note disappears on its own once every
+// store reads again.
+let jarsNote='', storeLine='<b>stores checked</b>';
+try{
+  const mj=JSON.parse(fs.readFileSync('weed-results-merged.json','utf8'));
+  const cov=Array.isArray(mj.coverage)?mj.coverage:[];
+  if(cov.length){
+    const ok=cov.filter(c=>c.ok), bad=cov.filter(c=>!c.ok);
+    storeLine=`<b>${ok.length} stores checked</b>`;
+    if(bad.length){
+      jarsNote=`<div style="display:flex;gap:9px;align-items:flex-start;background:color-mix(in srgb,var(--warn) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));border-radius:12px;padding:10px 12px;margin:10px 0 2px;font-size:12px;color:var(--muted)"><span style="color:var(--warn);font-weight:800;font-size:15px;line-height:1.2">⚠</span><div><b style="color:var(--ink)">Not read this run:</b> ${bad.map(c=>esc(c.name)).join(', ')}. This board does not cover ${bad.length===1?'that store':'those stores'} today.</div></div>`;
+    }
+  }else{
+    // older results file with no coverage record
+    const disps=[...new Set((mj.results||[]).map(r=>r.dispensary))];
+    storeLine=`<b>${disps.length} stores with picks</b>`;
+  }
+}catch(_){}
 
 const head=`<title>Tucson Flower · Best $/g</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -43,6 +67,7 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 .chipbtn[aria-pressed="true"]{background:var(--accent);color:#08120a;border-color:var(--accent)}
 .sort{margin-left:auto}
 .alert{display:block;text-decoration:none;background:linear-gradient(180deg,#e8452f,#cc3a26);color:#fff;border-radius:12px;padding:11px 13px;margin:10px 0 2px;font-size:13px;font-weight:600;line-height:1.35;box-shadow:0 2px 10px rgba(204,58,38,.35)}
+.stale{background:color-mix(in srgb,var(--warn) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 55%,var(--line));color:var(--ink);border-radius:12px;padding:10px 12px;margin:10px 0 2px;font-size:12.5px;font-weight:600;line-height:1.4}
 .alert b{font-weight:800}
 .alert .alert-disp{opacity:.9;font-weight:600}
 .alert:active{filter:brightness(.95)}
@@ -68,6 +93,8 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 .chip.bogo{background:color-mix(in srgb,var(--gold) 20%,transparent);color:var(--gold)}
 .chip.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
 .chip.qty{background:var(--surface2);color:var(--muted);font-weight:600}
+.chip.form{background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal)}
+.chip.via{background:transparent;color:var(--faint);font-weight:500;padding-left:0;white-space:normal}
 .price{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px;text-align:right}
 .ppg{font-size:22px;font-weight:800;letter-spacing:-.03em;line-height:1;white-space:nowrap}
 .ppg .cur{font-size:14px;font-weight:700;vertical-align:top;margin-right:-1px}
@@ -87,14 +114,16 @@ h1 small{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-
 const body=`<div class="wrap">
 <header>
   <div class="h-top"><h1>Tucson Flower<small>best value · $ / gram</small></h1><span class="gen">updated<br>${stamp} MST</span></div>
-  <p class="criteria">Sativa &amp; sativa-leaning · THC <b>&ge;27%</b> · ranked by what you actually pay. <b>15 stores checked</b> (13 Dutchie + JARS East Tucson &amp; Green Valley).</p>
+  <p class="criteria">Sativa &amp; sativa-leaning · THC <b>&ge;27%</b> · ranked by what you actually pay. ${storeLine}.</p>
   <div class="controls">
     <button class="chipbtn" data-filter="all" aria-pressed="true">All</button>
     <button class="chipbtn" data-filter="pure">★ Pure sativa</button>
     <button class="chipbtn" data-filter="under6">&le; $6/g</button>
     <button class="chipbtn" data-filter="deal">On deal</button>
+    <button class="chipbtn" data-filter="buds">Buds only</button>
     <button class="chipbtn sort" data-sort="ppg" aria-pressed="true">Sort: $/g</button>
   </div>
+  <div class="stale" id="stale" hidden></div>
   ${alertBanner}
   ${jarsNote}
 </header>
@@ -104,7 +133,7 @@ ${cards}
 </div>
 <div class="empty" id="empty" hidden>Nothing matches that filter.</div>
 <div class="legend"><span><b style="color:var(--gold)">★</b> menu pure sativa</span><span><b style="color:var(--teal)">≈</b> lineage inferred</span></div>
-<p class="note"><b>Reading it:</b> $/g is the price you pay (sale &divide; grams); $/oz is the 28g equivalent so sizes compare fairly. Deals are recomputed against the struck price — ✓ verified, ⚠ couldn't verify. Snapshot from the update time — reconfirm in-store.</p>
+<p class="note"><b>Reading it:</b> $/g is the single-unit price you pay (sale &divide; grams); $/oz is the 28g equivalent so sizes compare fairly. One card per product, at its best-value size — other sizes are listed on the card. ✓ = sale price and struck price both come from the store's own menu data. A gold "2 for $X" chip is a multi-buy offer: cheaper per gram if you buy that many, but it does not move the ranking. "Buds only" hides shake, pre-ground and infused. Snapshot from the update time — reconfirm in-store.</p>
 </div>
 <script>
 (function(){
@@ -116,6 +145,7 @@ ${cards}
       if(filter==='pure')return c.dataset.pure==='1';
       if(filter==='under6')return parseFloat(c.dataset.ppg)<=6;
       if(filter==='deal')return c.dataset.deal==='1';
+      if(filter==='buds')return c.dataset.buds==='1';
       return true;
     });
     vis.sort(function(a,b){
@@ -128,6 +158,11 @@ ${cards}
     empty.hidden=vis.length>0;
   }
   document.querySelectorAll('[data-filter]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-filter]').forEach(function(x){x.setAttribute('aria-pressed','false');});b.setAttribute('aria-pressed','true');filter=b.dataset.filter;apply();});});
+  // Staleness check runs in the viewer's browser, every time the page is opened:
+  // if the daily refresh stops landing, the page says so itself instead of
+  // quietly showing old prices under an old date.
+  var scraped=${now.getTime()},ageH=(Date.now()-scraped)/36e5,st=document.getElementById('stale');
+  if(ageH>26){var d=Math.floor(ageH/24);st.textContent='⚠ These prices are '+(d>=2?d+' days':Math.round(ageH)+' hours')+' old — the daily refresh has not run. Menus and deals have likely changed.';st.hidden=false;}
   var sb=document.querySelector('[data-sort]');
   sb.addEventListener('click',function(){sort=sort==='ppg'?'thc':'ppg';sb.textContent='Sort: '+(sort==='ppg'?'$/g':'THC');apply();});
   apply();

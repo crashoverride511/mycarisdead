@@ -1,15 +1,17 @@
 /**
  * run-flower-daily.js — one-shot daily FLOWER pipeline (no pre-rolls).
- * Runs every step that needs any method, in order, then leaves an updated
- * tucson-flower.html ready to publish:
- *   1. JARS East Tucson  (live headed Chrome via jars-lists.js, auto-closes)
- *   2. JARS Green Valley (same, ZIP 85614)
- *   3. Dutchie scrape across all configured stores (weed-value-finder.js)
- *   4. merge JARS into the ranked results (merge-strainpicker.js)
- *   5. build cards + assemble the artifact HTML (build-artifact-cards + assemble)
+ * Runs every step in order, then leaves an updated tucson-flower.html ready to
+ * publish:
+ *   1. scrape every store (weed-value-finder.js): Dutchie menus + JARS via its
+ *      storefront API (jars-api.js) — JARS no longer needs a browser
+ *   2. only if the JARS API failed for a store: live Playwright fallback for it
+ *      (jars-daemon.js + jars-pull-cdp.js, kill+relaunch on a block)
+ *   3. merge (merge-strainpicker.js) -> weed-results-merged.json
+ *   4. build cards + assemble the artifact HTML (build-artifact-cards + assemble)
+ *   5. deal alert + daily archive
  *
  * Env:
- *   SKIP_JARS=1   skip steps 1-2 (Dutchie-only; used by the cloud routine)
+ *   SKIP_JARS=1   leave JARS out entirely (Dutchie-only)
  *
  * Publishing is done by the caller (flower-daily wrapper -> `claude -p`), since
  * the Artifact tool lives in Claude Code, not in a plain Node process.
@@ -85,30 +87,46 @@ async function pullJars(label, profile, port, env) {
   return run(`${label} (relaunch)`, ['jars-pull-cdp.js'], env, { required: false });
 }
 
+// Playwright fallback config for the JARS stores that have one (profile + port).
+const JARS_FALLBACK = {
+  'jars-east-tucson': ['JARS East Tucson', '.jars-chrome-profile', 9222, {
+    JARS_PORT: '9222', JARS_WANT: 'jars-east-tucson',
+    JARS_TOKEN: 'east tucson', JARS_OUT: 'jars-east-tucson-lists.json', JARS_LABEL: 'JARS - East Tucson',
+  }],
+  'jars-green-valley': ['JARS Green Valley', '.jars-chrome-profile-gv', 9223, {
+    JARS_PORT: '9223', JARS_WANT: 'jars-green-valley',
+    JARS_TOKEN: 'green valley', JARS_OUT: 'jars-green-valley-lists.json', JARS_LABEL: 'JARS - Green Valley',
+  }],
+};
+
 (async () => {
   log('=== daily flower run start ===');
 
+  // 1) The finder reads EVERY store: Dutchie menus via their product JSON, and
+  //    JARS via its storefront API (jars-api.js — no browser, ~1 s per store).
+  const only = process.env.SKIP_JARS
+    ? ['--only', require('./weed-value-finder.js').DISPENSARIES.filter((d) => d.platform !== 'jars' && !d.disabled && !d.verify).map((d) => d.id).join(',')]
+    : [];
+  if (process.env.SKIP_JARS) log('SKIP_JARS set — leaving JARS out of this run');
+  run('Scrape all stores', ['weed-value-finder.js', '--headless', '--json', 'weed-results.json', '--csv', 'weed-results.csv', ...only]);
+
+  // 2) JARS safety net. If the API didn't deliver a JARS store, fall back to the
+  //    old live Playwright scrape for that store (kill+relaunch on a block), and
+  //    let the merge step fold in whatever it harvested. Never serves stale data:
+  //    the merge refuses lists files that weren't harvested just now.
   if (!process.env.SKIP_JARS) {
-    // TWO-PROFILE JARS pull, each on its own CDP port. Playwright does the full
-    // store→MEDICAL switch every run (jars-pull-cdp.js switchStoreMedical). If a
-    // pull is blocked, pullJars kills ALL JARS instances and relaunches, then
-    // pulls again — JARS = Playwright, 100% of the time, no manual pass.
-    await pullJars('JARS East Tucson', '.jars-chrome-profile', 9222, {
-      JARS_PORT: '9222', JARS_WANT: 'jars-east-tucson',
-      JARS_TOKEN: 'east tucson', JARS_OUT: 'jars-east-tucson-lists.json', JARS_LABEL: 'JARS - East Tucson',
-    });
-    await pullJars('JARS Green Valley', '.jars-chrome-profile-gv', 9223, {
-      JARS_PORT: '9223', JARS_WANT: 'jars-green-valley',
-      JARS_TOKEN: 'green valley', JARS_OUT: 'jars-green-valley-lists.json', JARS_LABEL: 'JARS - Green Valley',
-    });
-  } else {
-    log('SKIP_JARS set — skipping JARS live pulls (Dutchie-only run)');
+    let coverage = [];
+    try { coverage = JSON.parse(require('fs').readFileSync(path.join(DIR, 'weed-results.json'), 'utf8')).coverage || []; } catch (_) {}
+    for (const [id, cfg] of Object.entries(JARS_FALLBACK)) {
+      const c = coverage.find((x) => x.id === id);
+      if (c && c.ok) continue;
+      log(`⚠ JARS API did not deliver ${id} (${c ? c.error : 'no coverage record'}) — falling back to the Playwright scrape`);
+      await pullJars(...cfg);
+    }
   }
 
-  // Dutchie scrape (required)
-  run('Dutchie scrape', ['weed-value-finder.js', '--headless', '--json', 'weed-results.json', '--csv', 'weed-results.csv'], { FLOWER_PIPELINE: '1' });
-  // Merge JARS (uses whatever JARS json exists; skips missing stores gracefully)
-  run('Merge JARS', ['merge-strainpicker.js']);
+  // Build weed-results-merged.json (pass-through unless a fallback pull ran)
+  run('Merge', ['merge-strainpicker.js']);
   // Build artifact HTML
   run('Build cards', ['build-artifact-cards.js']);
   run('Assemble HTML', ['assemble-artifact.js']);

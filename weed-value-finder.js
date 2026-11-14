@@ -36,9 +36,23 @@
  * ------------------------------
  * Most Tucson dispensaries run Dutchie embedded menus, so the generic `dutchie`
  * adapter covers them by slug. The dispensary list lives in DISPENSARIES below
- * (or an external --config JSON). JARS uses a custom storefront over Dutchie's
- * API, handled by the `jars` adapter's click-through flow. Any dispensary whose
- * menu fails to load is logged and skipped rather than killing the run.
+ * (or an external --config JSON). JARS runs its own storefront; the `jars`
+ * adapter reads it from that storefront's backend API (jars-api.js).
+ *
+ * Where the numbers come from (rewritten 2026-11-14)
+ * --------------------------------------------------
+ * Both adapters read the menu's STRUCTURED product data, not rendered text:
+ *   - Dutchie: the page's own `FilteredProducts` GraphQL responses, every page
+ *     of them (the rendered menu only shows the first ~100 products).
+ *   - JARS: POST /product-service/filter on the storefront API, by retailer id.
+ * So price, list price, weight, THC, lineage and stock are each a field the
+ * store's POS published — nothing is inferred from "the lowest dollar amount on
+ * the card". Reading rendered cards survives only as the Dutchie fallback
+ * (`--dom-only` forces it) and it is flagged in the coverage table when used.
+ *
+ * Every run ends with a COVERAGE table: each store, how many listings were
+ * read, and any store that could not be read — named, never silently skipped.
+ * It is also written to the JSON (`coverage`) and shown on the phone page.
  *
  * Setup (same toolchain as turf-searcher.js / amazon-coupon-finder.js):
  *   npm install playwright
@@ -66,11 +80,15 @@
  *   node weed-value-finder.js --config dispensaries.json
  *   node weed-value-finder.js --selftest              # verify the math, no browser
  *
- * JARS (East Tucson + Green Valley): custom storefront with no public Dutchie
- * slug. Runs by default now, but JARS hides Arizona stores from non-AZ IPs — so
- * run from your Tucson connection. The adapter drives the age-gate → Arizona →
- * store flow and VERIFIES it landed on the right AZ store before trusting prices
- * (it skips rather than return an out-of-state store's menu).
+ *   node weed-value-finder.js --only jars-east-tucson  # JARS alone: ~1 s, no browser
+ *   node weed-value-finder.js --concurrency 1         # one store at a time (default 3)
+ *   node weed-value-finder.js --dom-only              # old rendered-card scrape (page 1 only)
+ *   node weed-value-finder.js --why "silver haze"     # trace matching listings through the filter
+ *
+ * JARS (East Tucson, Green Valley, North Tucson): read from the storefront API
+ * by retailer id — works from any connection, medical menu where the store has
+ * one. The old Playwright store-switching scrape (scrapeJars below,
+ * jars-pull-cdp.js) is kept only as run-flower-daily.js's fallback.
  *
  * Notes / caveats:
  *  - THC % and lineage are only as good as what the store publishes. Listings
@@ -105,7 +123,11 @@ const DISPENSARIES = [
   { id: 'd2-eastside', name: 'D2 Dispensary (Eastside)', platform: 'dutchie', slug: 'd2-dispensary', menuType: 'med' },
   { id: 'd2-downtown', name: 'D2 Dispensary (Downtown)', platform: 'dutchie', slug: 'the-downtown-dispensary', menuType: 'med' },
   { id: 'botanica', name: 'Botanica', platform: 'dutchie', slug: 'botanica', menuType: 'med' },
-  { id: 'trulieve-tucson', name: 'Trulieve / Harvest of Tucson', platform: 'dutchie', slug: 'harvest-of-tucson', menuType: 'med' },
+  // Trulieve moved off Dutchie: the slug still resolves ("Trulieve of Tucson
+  // Blenman Elm") but shows NOT ACCEPTING ORDERS with zero products (checked
+  // 2026-11-14; it had been silently returning nothing since at least October).
+  // `disabled` entries are skipped by default; run with --only trulieve-tucson to re-check.
+  { id: 'trulieve-tucson', name: 'Trulieve / Harvest of Tucson', platform: 'dutchie', slug: 'harvest-of-tucson', menuType: 'med', disabled: 'left Dutchie (menu empty, not accepting orders)' },
   { id: 'nature-med', name: 'Nature Med (Tucson)', platform: 'dutchie', slug: 'nature-med-tucson', menuType: 'med' },
   { id: 'the-flower-shop', name: 'The Flower Shop', platform: 'dutchie', slug: 'the-flower-shop', menuType: 'med' },
   { id: 'tucson-saints', name: 'Tucson Saints', platform: 'dutchie', slug: 'tucson-saints', menuType: 'med' },
@@ -115,14 +137,16 @@ const DISPENSARIES = [
   { id: 'sol-flower-south', name: 'Sol Flower (South Tucson)', platform: 'dutchie', slug: 'sol-flower-dispensary-south-tucson', menuType: 'med' }, // live-verified 2026-08-19
   { id: 'sol-flower-north', name: 'Sol Flower (North Tucson)', platform: 'dutchie', slug: 'sol-flower-dispensary-north-tucson', menuType: 'med' }, // live-verified 2026-08-19
 
-  // --- JARS (Tucson + Green Valley): custom Buddi storefront over Dutchie's
-  //     API — no public Dutchie slug. The adapter drives the age-gate → state
-  //     → store flow, which appears on a residential AZ IP. From a datacenter /
-  //     non-AZ IP the site geo-defaults to another state and hides the AZ
-  //     picker, so this is BEST-EFFORT: run it headed the first time to confirm
-  //     it lands on the right store. Marked `verify` so it's opt-in.
+  // --- JARS (Tucson + Green Valley): a "Buddy eCommerce" storefront, not a
+  //     public Dutchie menu. Read straight from the storefront's backend API by
+  //     retailer id (see jars-api.js) — no browser, no store switching, works
+  //     from any connection. `match` finds the store in the API's live retailer
+  //     list (name | address); medical menu when the store has one, else rec
+  //     (flagged "· rec"). `store`/`shopSlug` are only used by the old
+  //     Playwright fallback (jars-pull-cdp.js) and the pre-roll finder.
   { id: 'jars-east-tucson', name: 'JARS - East Tucson', platform: 'jars', store: 'JARS - East Tucson (Rec/Med)', match: 'East Tucson', shopSlug: 'jars-east-tucson', mode: 'med' },
-  { id: 'jars-green-valley', name: 'JARS Green Valley', platform: 'jars', store: 'JARS Green Valley / Elevate AZ 1', match: 'Green Valley', shopSlug: 'jars-green-valley', mode: 'med' },
+  { id: 'jars-green-valley', name: 'JARS - Green Valley', platform: 'jars', store: 'JARS Green Valley / Elevate AZ 1', match: 'Green Valley', shopSlug: 'jars-green-valley', mode: 'med' },
+  { id: 'jars-north-tucson', name: 'JARS - North Tucson', platform: 'jars', store: 'JARS - North Tucson', match: 'North Tucson|3008 North Stone', mode: 'med' }, // rec-only store (N Stone Ave), found via the API 2026-11-14
 
   // --- Add more Tucson dispensaries here. To find a store's Dutchie slug:
   //     open its website's menu, and read the dutchie.com/embedded-menu/<slug>
@@ -160,6 +184,9 @@ function parseArgs(argv) {
     csvOut: get('csv'),
     selftest: has('selftest'),
     why: get('why'), // regex: trace every scraped listing whose name matches it
+    category: get('category', 'flower'), // Dutchie menu category, e.g. concentrates
+    concurrency: Math.max(1, Number(get('concurrency', 3))), // stores scraped at once
+    domOnly: has('dom-only'), // skip the structured read; scrape rendered cards (page 1 only)
   };
 }
 
@@ -204,10 +231,16 @@ function parseWeightGrams(text) {
   const g = text.match(/(\d+(?:\.\d+)?|\.\d+)\s*g(?:ram)?s?\b/i);
   if (g) { const n = Number(g[1]); return { grams: n, label: `${n}g` }; }
   // oz fractions (1/8 oz, 1/2 oz, 1 oz)
-  const oz = text.match(/(\d(?:\/\d)?)\s*oz\b/i);
+  // also decimals ("0.5 oz" / ".5oz"), which the old single-digit pattern read
+  // as "5 oz" = 140 g
+  const oz = text.match(/(\d+\/\d+|\d*\.\d+|\d+)\s*oz\b/i);
   if (oz) {
     const frac = oz[1];
-    const grams = OZ_TO_G[frac] ?? (frac.includes('/') ? null : Number(frac) * 28);
+    let grams;
+    if (frac.includes('/')) {
+      const [a, b] = frac.split('/').map(Number);
+      grams = OZ_TO_G[frac] ?? (b ? +((a / b) * 28).toFixed(2) : null);
+    } else grams = +(Number(frac) * 28).toFixed(2);
     return { grams, label: `${frac} oz` };
   }
   return { grams: null, label: null };
@@ -218,9 +251,12 @@ function parseWeightGrams(text) {
 function classifyStrain(text) {
   if (!text) return 'unknown';
   const t = text.toUpperCase();
-  if (/SATIVA[\s_]*HYBRID|SATIVA[\s-]*DOM/.test(t)) return 'sativa_hybrid';
-  if (/HYBRID[\s_]*SATIVA/.test(t)) return 'sativa_hybrid';
-  if (/INDICA[\s_]*HYBRID|HYBRID[\s_]*INDICA|INDICA[\s-]*DOM/.test(t)) return 'indica_hybrid';
+  // Separators vary by source: JARS "SATIVA_HYBRID", Dutchie "Sativa-Hybrid",
+  // menus "Sativa Hybrid" / "Sativa Dominant". A hyphenated "Sativa-Hybrid" used
+  // to fall through to plain SATIVA and get starred as pure sativa.
+  if (/SATIVA[\s_-]*HYBRID|SATIVA[\s_-]*DOM/.test(t)) return 'sativa_hybrid';
+  if (/HYBRID[\s_-]*SATIVA/.test(t)) return 'sativa_hybrid';
+  if (/INDICA[\s_-]*HYBRID|HYBRID[\s_-]*INDICA|INDICA[\s_-]*DOM/.test(t)) return 'indica_hybrid';
   if (/\bSATIVA\b/.test(t)) return 'sativa';
   if (/\bINDICA\b/.test(t)) return 'indica';
   if (/\bHYBRID\b/.test(t)) return 'hybrid';
@@ -338,48 +374,75 @@ function saveStrainCache(cache) {
   try { fs.writeFileSync(STRAIN_CACHE_PATH, JSON.stringify(cache, null, 0)); } catch (_) { /* best effort */ }
 }
 
+// Fetch Leafly JSON. Returns the body, or null for a definitive "no such
+// strain" (404). THROWS on anything else (timeout, 429, 5xx, bad body) so a
+// network hiccup is never mistaken for — and cached as — "strain unknown".
 async function leaflyFetchJson(url) {
-  const r = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0' } });
-  if (r.status !== 200) return null;
-  return r.json().catch(() => null);
+  const r = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15000) });
+  if (r.status === 404) return null;
+  if (r.status !== 200) throw new Error(`Leafly HTTP ${r.status}`);
+  return r.json();
 }
+
+// A cached miss is trusted for this long, then looked up again (Leafly adds
+// strains, and our name-cleaning improves). Misses are stored as
+// { miss:true, at:<ISO> }; a bare `null` is a legacy miss with no date — those
+// were cached forever even when the "miss" was really a failed request, so they
+// are all re-checked once.
+const LEAFLY_MISS_TTL_DAYS = 30;
+const cachedLeafly = (cache, key) => {
+  if (!Object.prototype.hasOwnProperty.call(cache, key)) return undefined;
+  const v = cache[key];
+  if (v && !v.miss) return v; // a real classification
+  if (v && v.miss && Date.now() - Date.parse(v.at) < LEAFLY_MISS_TTL_DAYS * 864e5) return null; // fresh miss
+  return undefined; // legacy/stale miss -> look it up again
+};
 
 // Look up one cleaned strain name on Leafly. Returns { bucket, slug, category,
 // matchedName } or null. Tries the direct slug first, then a name-matched search
-// hit. `cache` is keyed by the cleaned strain string.
+// hit. `cache` is keyed by the cleaned strain string. Throws on network trouble
+// (caller treats that as "unknown for this run" and does not cache it).
 async function leaflyClassifyStrain(cleaned, cache) {
   if (!cleaned || cleaned.length < 3) return null;
-  if (Object.prototype.hasOwnProperty.call(cache, cleaned)) return cache[cleaned];
+  const hit0 = cachedLeafly(cache, cleaned);
+  if (hit0 !== undefined) return hit0;
 
   let result = null;
   // 1) direct slug
-  const direct = await leaflyFetchJson(LEAFLY_API + toSlug(cleaned)).catch(() => null);
+  const direct = await leaflyFetchJson(LEAFLY_API + toSlug(cleaned));
   if (direct && direct.category) {
     result = { bucket: classifyLeafly(direct.category, direct.descriptionPlain || direct.shortDescriptionPlain), slug: direct.slug, category: direct.category, matchedName: direct.name };
   } else {
     // 2) search, accept a hit only if its name is a strong match (slug is a
     //    subset of, or equal to, our cleaned slug) — avoids Leafly's fuzzy
     //    top-hit returning an unrelated popular strain.
-    const search = await leaflyFetchJson(`${LEAFLY_SEARCH}?query=${encodeURIComponent(cleaned)}&take=8`).catch(() => null);
+    const search = await leaflyFetchJson(`${LEAFLY_SEARCH}?query=${encodeURIComponent(cleaned)}&take=8`);
     const hits = (search && search.hits && search.hits.strain) || [];
     const mySlug = toSlug(cleaned);
     const hit = hits.find((h) => h.slug && (h.slug === mySlug || mySlug.includes(h.slug) || h.slug.includes(mySlug)));
     if (hit) {
-      const full = await leaflyFetchJson(LEAFLY_API + hit.slug).catch(() => null);
+      const full = await leaflyFetchJson(LEAFLY_API + hit.slug);
       const desc = (full && (full.descriptionPlain || full.shortDescriptionPlain)) || hit.shortDescriptionPlain;
       result = { bucket: classifyLeafly(hit.category, desc), slug: hit.slug, category: hit.category, matchedName: hit.name };
     }
   }
-  cache[cleaned] = result; // cache misses (null) too, so we don't retry them
+  // Only definitive answers reach here (network errors threw above).
+  cache[cleaned] = result || { miss: true, at: new Date().toISOString() };
   return result;
 }
 
 // Resolve lineage for every hybrid/unknown listing by looking the strain up on
 // Leafly. Mutates records in place. One lookup per DISTINCT strain, cached to
 // disk, paced politely. Falls back to the offline dictionary on a miss.
-async function resolveLeanViaLeafly(records, { concurrency = 6, log = () => {} } = {}) {
+//   only      optional predicate: look up just the listings where the answer can
+//             matter (the finder passes "clears the THC floor and has a price" —
+//             ~3/4 of hybrids fail the floor, so classifying them is wasted calls)
+//   budgetMs  wall-clock cap on new network lookups. Leafly's search endpoint
+//             can take 10 s+ per call; whatever isn't reached falls back to the
+//             name dictionary this run and is fetched on a later run.
+async function resolveLeanViaLeafly(records, { concurrency = 6, log = () => {}, only = null, budgetMs = 120000 } = {}) {
   const cache = loadStrainCache();
-  const targets = records.filter((r) => r.strainBucket === 'hybrid' || r.strainBucket === 'unknown');
+  const targets = records.filter((r) => (r.strainBucket === 'hybrid' || r.strainBucket === 'unknown') && (!only || only(r)));
   // group by cleaned strain so we look each strain up once
   const byStrain = new Map();
   for (const r of targets) {
@@ -389,22 +452,28 @@ async function resolveLeanViaLeafly(records, { concurrency = 6, log = () => {} }
     byStrain.get(cleaned).push(r);
   }
   const entries = [...byStrain.entries()];
-  const netBefore = entries.filter(([c]) => !Object.prototype.hasOwnProperty.call(cache, c)).length;
-  log(`Looking up ${byStrain.size} distinct strain(s) on Leafly (${netBefore} new, ${byStrain.size - netBefore} cached)...`);
+  const netBefore = entries.filter(([c]) => cachedLeafly(cache, c) === undefined).length;
+  log(`Looking up ${byStrain.size} distinct strain(s) on Leafly (${netBefore} to fetch, ${byStrain.size - netBefore} cached)...`);
 
   // Resolve all lookups with a bounded worker pool (network-bound -> parallel is
   // a huge speedup vs. sequential). Results collected, then applied below.
   const infoByStrain = new Map();
-  let idx = 0;
+  let idx = 0, netErrors = 0, deferred = 0;
+  const deadline = Date.now() + budgetMs;
   const worker = async () => {
     while (idx < entries.length) {
       const [cleaned] = entries[idx++];
       let info = null;
-      try { info = await leaflyClassifyStrain(cleaned, cache); } catch (_) { info = null; }
+      const cached = cachedLeafly(cache, cleaned);
+      if (cached !== undefined) info = cached; // cache hits are free — always apply them
+      else if (Date.now() > deadline) deferred++;
+      else { try { info = await leaflyClassifyStrain(cleaned, cache); } catch (_) { info = null; netErrors++; } }
       infoByStrain.set(cleaned, info);
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, entries.length || 1) }, worker));
+  if (netErrors) log(`⚠ ${netErrors} Leafly lookup(s) failed (network) — those strains fall back to the name dictionary this run and will be retried next run.`);
+  if (deferred) log(`⚠ Leafly time budget (${Math.round(budgetMs / 1000)}s) reached — ${deferred} strain(s) not looked up this run (name dictionary only); they'll be fetched next run.`);
 
   let hits = 0, netLookups = netBefore;
   for (const [cleaned, recs] of entries) {
@@ -471,12 +540,18 @@ function normalizeListing(raw) {
   const nameW = parseWeightGrams(raw.name || '');
   const packish = /\b\d+\s*(?:pk|pack|ct)\b|\bpre-?rolls\b|\bblunts\b/i.test(`${raw.name || ''} ${raw.weightText || ''} ${blob}`);
   let grams, weightLabel;
-  if (!packish && nameW.grams != null && cartW.grams != null && Math.abs(nameW.grams - cartW.grams) > 1e-6) {
+  // Structured rows (API data) carry the POS weight for THIS price option — never
+  // let a weight mentioned in the product name override it (a "…14g" name on a
+  // multi-weight product would otherwise price its 1/8 oz option as 14 g).
+  if (!raw.structured && !packish && nameW.grams != null && cartW.grams != null && Math.abs(nameW.grams - cartW.grams) > 1e-6) {
     ({ grams, label: weightLabel } = nameW);
   } else {
     ({ grams, label: weightLabel } = cartW.grams != null ? cartW : nameW);
   }
-  const bucket = classifyStrain(raw.strainText || blob);
+  // Structured rows give lineage as its own field; an empty one means "none
+  // given" — don't go fishing in the blob (it holds the product NAME, so a
+  // strain called "Sativa Sunrise" would classify itself).
+  const bucket = classifyStrain(raw.structured ? raw.strainText : (raw.strainText || blob));
 
   // Charged price = the lowest listed dollar amount (sale beats MSRP).
   // Original = the highest, when there's a distinct struck price above it.
@@ -505,9 +580,15 @@ function normalizeListing(raw) {
     notes: [],
   };
   out.rawText = (raw.priceText ? `${raw.priceText} || ${blob}` : blob).slice(0, 400); // for --why tracing
+  // Extra structured facts (stock, store specials, multi-buy price, source).
+  if (raw.extra) Object.assign(out, raw.extra);
+  if (out.bundle && grams) out.bundle = { ...out.bundle, pricePerGram: out.bundle.unitPrice / grams };
 
   // ---- Deal verification ------------------------------------------------
-  const claimsDiscount = /%\s*off|OFF\b|\bdeal\b|\bsale\b/i.test(blob) || original != null;
+  // Free-text sniffing is for scraped card text only. On structured rows the
+  // sale-vs-list pair IS the verification, and sniffing misfires on names (the
+  // brand "Daze Off" tripped /OFF\b/ and earned every one of its jars a ⚠).
+  const claimsDiscount = (!raw.structured && /%\s*off|OFF\b|\bdeal\b|\bsale\b/i.test(blob)) || original != null;
   out.dealClaimed = claimsDiscount;
   const claimedPctM = blob.match(/(\d{1,2})\s*%\s*off/i);
   const claimedPct = claimedPctM ? Number(claimedPctM[1]) : null;
@@ -696,17 +777,220 @@ const DUTCHIE_HARVEST = () => {
   return out;
 };
 
+// ---- Dutchie structured path (preferred) -----------------------------------
+// The embedded menu fills itself from a GraphQL call, `FilteredProducts`, that
+// returns the store's products as JSON, 100 per page. The rendered page only
+// ever shows page 1 (there is a pager at the bottom, not infinite scroll), so
+// scraping the DOM silently missed everything past the first ~100 products —
+// about 40% of a big menu like Earth's Healing. So instead of reading cards:
+//   1. load the menu page as before (a real browser gets past Cloudflare) and
+//      capture the page's OWN FilteredProducts request + response;
+//   2. replay that exact request from inside the page for pages 2..N (same
+//      query hash and headers — nothing hard-coded to go stale);
+//   3. map the JSON to rows: one per in-stock weight option, with the POS
+//      weight, list price and special price for the menu type we asked for.
+// The DOM harvest below remains as the fallback if no such response shows up.
+
+// THC as a percent from Dutchie's potency object. A few stores key the flower
+// percent in with the unit set to MILLIGRAMS ("28.12 mg"); for flower a value in
+// the plausible percent band can only be a percent, so read it as one.
+function dutchieThcPercent(p, category) {
+  const c = p.THCContent;
+  const range = (c && Array.isArray(c.range) ? c.range : []).filter((n) => typeof n === 'number' && n > 0);
+  if (!range.length) return { thc: null, note: null };
+  const v = +Math.min(...range).toFixed(2); // some stores publish 28.6792
+
+
+  if (c.unit === 'PERCENTAGE') return { thc: v, note: null };
+  if (c.unit === 'MILLIGRAMS' && /flower/i.test(category || '') && v >= 5 && v <= 45) {
+    return { thc: v, note: `THC listed as ${v} mg on the menu — read as ${v}%` };
+  }
+  return { thc: null, note: null };
+}
+
+// Best "N for $X" multi-buy that applies to ONE weight option of a product, from
+// Dutchie's own special data (not from the special's name):
+//   specialIdsPerOption  -> which special ids apply to this option
+//   bogoSpecials[].itemsForAPrice {enabled, value}      -> the bundle total
+//   bogoSpecials[].bogoRewards[].totalQuantity.quantity -> how many you must buy
+// Only plain "buy N of these for $X" bundles are computed; specials with a
+// separate buy-condition ("buy A, get B") are left alone. Returns
+// { label, qty, unitPrice, special } or null. Shown on the card, never ranked.
+function dutchieBundleFor(p, opt, pricingType, charged) {
+  const per = (p.specialIdsPerOption || []).find((o) => o && o.option === opt);
+  const ids = new Set([...(per && per.rewardIds || []), ...(per && per.conditionIds || [])]);
+  if (!ids.size) return null;
+  let best = null;
+  for (const s of ((p.specialData || {}).bogoSpecials || [])) {
+    if (!s || !ids.has(s.specialId)) continue;
+    const mt = String(s.menuType || 'both').toLowerCase();
+    if (mt !== 'both' && !mt.startsWith(pricingType)) continue;
+    if ((s.bogoConditions || []).length) continue;
+    const total = s.itemsForAPrice && s.itemsForAPrice.enabled ? Number(s.itemsForAPrice.value) : NaN;
+    const rw = (s.bogoRewards || []).find((r) => r && r.totalQuantity && r.totalQuantity.enabled);
+    const qty = rw ? Number(rw.totalQuantity.quantity) : NaN;
+    if (!(total > 0) || !(qty >= 2)) continue;
+    const unitPrice = total / qty;
+    if (unitPrice < charged && (!best || unitPrice < best.unitPrice)) {
+      best = { label: `${qty} for $${Number.isInteger(total) ? total : total.toFixed(2)}`, qty, unitPrice, special: s.specialName || null };
+    }
+  }
+  return best;
+}
+
+// One Dutchie product -> raw rows for normalizeListing (pure; unit-tested).
+// pricingType 'med' | 'rec' selects medicalPrices/medicalSpecialPrices or the
+// rec pair; Options[i] lines up with each price array by index.
+function dutchieProductToRaws(p, pricingType, slug, category = 'flower') {
+  const med = pricingType === 'med';
+  if (med ? p.recOnly : p.medicalOnly) return [];
+  const options = p.Options || [];
+  const list = (med ? p.medicalPrices : p.recPrices) || p.Prices || [];
+  const special = (med ? p.medicalSpecialPrices : p.recSpecialPrices) || [];
+  const below = new Set(p.optionsBelowThreshold || []);
+  const children = (p.POSMetaData && p.POSMetaData.children) || [];
+  const { thc, note } = dutchieThcPercent(p, category);
+  const sd = p.specialData || {};
+  const specials = [...(sd.saleSpecials || []), ...(sd.bogoSpecials || [])].map((s) => s && s.specialName).filter(Boolean);
+  const rows = [];
+  options.forEach((opt, i) => {
+    const lp = Number(list[i]);
+    if (!(lp > 0) || below.has(opt)) return;
+    const sp = special.length === options.length ? Number(special[i]) : NaN;
+    const onSale = sp > 0 && sp < lp;
+    const child = children.find((c) => c && c.option === opt);
+    rows.push({
+      structured: true,
+      name: p.Name || '',
+      brand: p.brandName || (p.brand && p.brand.name) || '',
+      strainText: p.strainType || '',
+      thcText: thc != null ? `THC: ${thc}%` : '',
+      weightText: opt,
+      priceText: onSale ? `$${sp} | $${lp}` : `$${lp}`,
+      url: p.cName ? `https://dutchie.com/embedded-menu/${slug}/product/${p.cName}` : null,
+      extra: {
+        stock: child && child.quantityAvailable != null ? child.quantityAvailable : null,
+        specials: [...new Set(specials)],
+        bundle: dutchieBundleFor(p, opt, pricingType, onSale ? sp : lp),
+        subcategory: p.subcategory || null,
+        ...(note ? { thcNote: note } : {}),
+      },
+    });
+  });
+  return rows;
+}
+
+// Load one menu URL and return every product via the page's own GraphQL call.
+// Returns { products, total } or null when the page never made that call.
+async function fetchDutchieStructured(page, url) {
+  const isProductList = (r) => {
+    const u = r.url();
+    if (!/operationName=FilteredProducts/.test(u) || r.status() !== 200) return false;
+    try {
+      const v = JSON.parse(new URL(u).searchParams.get('variables'));
+      return v && v.productsFilter && !(v.productsFilter.productIds || []).length && typeof v.page === 'number';
+    } catch (_) { return false; }
+  };
+  const waiter = page.waitForResponse(isProductList, { timeout: 25000 }).catch(() => null);
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
+  const first = await waiter;
+  if (!first) return null;
+  const body = await first.json().catch(() => null);
+  const fp = body && body.data && body.data.filteredProducts;
+  if (!fp || !Array.isArray(fp.products)) return null;
+  const products = [...fp.products];
+  const totalPages = (fp.queryInfo && fp.queryInfo.totalPages) || 1;
+  const total = (fp.queryInfo && fp.queryInfo.totalCount) ?? products.length;
+
+  // Replay the same request for the remaining pages from inside the page.
+  const reqUrl = first.url();
+  const reqHeaders = first.request().headers();
+  const headers = {};
+  for (const [k, v] of Object.entries(reqHeaders)) {
+    if (k === 'content-type' || k === 'accept' || k.startsWith('apollographql-') || (k.startsWith('x-') && !k.startsWith('x-client-data'))) headers[k] = v;
+  }
+  for (let n = 1; n < totalPages && n < 30; n++) {
+    const u = new URL(reqUrl);
+    const vars = JSON.parse(u.searchParams.get('variables'));
+    vars.page = n;
+    u.searchParams.set('variables', JSON.stringify(vars));
+    let got = null;
+    for (let attempt = 0; attempt < 2 && !got; attempt++) {
+      got = await page.evaluate(async ({ url, headers }) => {
+        try {
+          const r = await fetch(url, { headers, credentials: 'include' });
+          if (!r.ok) return null;
+          const j = await r.json();
+          return (j && j.data && j.data.filteredProducts && j.data.filteredProducts.products) || null;
+        } catch (_) { return null; }
+      }, { url: u.toString(), headers }).catch(() => null);
+      if (!got) await page.waitForTimeout(1200);
+    }
+    if (!got) throw new Error(`page ${n + 1}/${totalPages} of the product list failed to load`);
+    products.push(...got);
+  }
+  // de-dupe by id (featured rows can repeat across pages)
+  const seen = new Set();
+  const uniq = products.filter((p) => { const k = p.id || p._id || p.cName; if (seen.has(k)) return false; seen.add(k); return true; });
+  return { products: uniq, total };
+}
+
+// Scrape one Dutchie store. Returns { rows, menu:'med'|'rec'|null, source, error }.
 async function scrapeDutchie(context, disp, opts) {
+  const log = opts.log || console.log;
+  const primary = disp.menuType || 'rec';
+  const category = opts.category || 'flower';
+  const tryOrder = primary === 'med' ? ['med', 'rec'] : [primary];
+  log(`\n▶ ${disp.name} (dutchie:${disp.slug})`);
+  let lastErr = null;
+  if (!opts.domOnly) {
+    for (let i = 0; i < tryOrder.length; i++) {
+      const mt = tryOrder[i];
+      const url = `https://dutchie.com/embedded-menu/${disp.slug}/products/${category}?menuType=${mt}`;
+      const page = await context.newPage();
+      try {
+        const res = await fetchDutchieStructured(page, url);
+        await page.close().catch(() => {});
+        if (!res) { lastErr = 'no product-list response'; break; } // page shape changed / blocked -> DOM fallback
+        const usedRec = mt === 'rec' && primary === 'med';
+        const raws = res.products.flatMap((p) => dutchieProductToRaws(p, mt, disp.slug, category));
+        if (!raws.length) {
+          if (i < tryOrder.length - 1) { log(`   ${mt} menu is empty — trying ${tryOrder[i + 1]} menu…`); continue; }
+          log(`   menu answered but lists no ${category} products (store closed online ordering or left Dutchie?)`);
+          return { rows: [], menu: null, source: 'api', error: `menu lists no ${category} products`, products: 0, definitive: true };
+        }
+        log(`   ${res.products.length} product(s) → ${raws.length} priced option(s)${usedRec ? '  ⚠ REC menu (store has no medical menu — prices flagged “rec”)' : ''}`);
+        // totalCount runs a little high (the server drops a few below-stock rows
+        // after paginating), so only flag a real shortfall.
+        if (res.products.length < res.total * 0.85) log(`   ⚠ menu reports ${res.total} products but only ${res.products.length} came back`);
+        const label = disp.name + (usedRec ? ' · rec' : '');
+        const rows = raws.slice(0, opts.maxPerStore * 4).map((c) => normalizeListing({ dispensary: label, dispensaryId: disp.id, ...c }));
+        return { rows, menu: mt, source: 'api', error: null, products: res.products.length };
+      } catch (e) {
+        lastErr = e.message;
+        log(`   structured read failed on ${mt}: ${e.message}`);
+        await page.close().catch(() => {});
+        break; // fall back to the DOM harvest
+      }
+    }
+    log(`   ↪ falling back to reading the rendered page (${lastErr || 'unknown'}) — page 1 only`);
+  }
+  const rows = await scrapeDutchieDom(context, disp, opts);
+  return { rows, menu: rows.length ? (/· rec$/.test(rows[0].dispensary) ? 'rec' : primary) : null, source: 'dom', error: rows.length ? null : (lastErr || 'no product cards found') };
+}
+
+// ---- Dutchie DOM fallback (the original scraper; page 1 of the menu only) ----
+async function scrapeDutchieDom(context, disp, opts) {
+  const console = { log: opts.log || globalThis.console.log }; // route through the per-store log buffer
   const primary = disp.menuType || 'rec';
   // Medical-first, then fall back to the REC menu for rec-only stores. The user
   // wants rec deals included when a store has no medical menu (e.g. Sol Flower is
   // rec-only). Rec-sourced items are FLAGGED (dispensary name gets a " · rec"
   // suffix) so medical vs rec pricing is never confused on the board.
   const tryOrder = primary === 'med' ? ['med', 'rec'] : [primary];
-  console.log(`\n▶ ${disp.name} (dutchie:${disp.slug})`);
   for (let i = 0; i < tryOrder.length; i++) {
     const mt = tryOrder[i];
-    const url = `https://dutchie.com/embedded-menu/${disp.slug}/products/flower?menuType=${mt}`;
+    const url = `https://dutchie.com/embedded-menu/${disp.slug}/products/${opts.category || 'flower'}?menuType=${mt}`;
     const page = await context.newPage();
     try {
       await gotoAndSettle(page, url);
@@ -1004,20 +1288,34 @@ async function scrapeJars(context, disp, opts, hooks = {}) {
   }
 }
 
+// JARS: read the store's menu from the storefront's backend API (jars-api.js) —
+// plain HTTPS, store chosen by retailer id, so no browser, age gate, store
+// switching or IP geo-lock. Returns the same shape as scrapeDutchie.
+async function scrapeJarsApi(disp, opts) {
+  const log = opts.log || console.log;
+  log(`\n▶ ${disp.name} (jars api)`);
+  const jars = require('./jars-api.js');
+  const category = JARS_CATEGORY[(opts.category || 'flower').toLowerCase()];
+  if (!category) { log(`   no JARS category mapping for "${opts.category}" — skipping`); return { rows: [], menu: null, source: 'api', error: `unsupported category ${opts.category}` }; }
+  try {
+    const r = await jars.pullStore(disp, { category });
+    const label = disp.name + (r.usedRec ? ' · rec' : '');
+    log(`   ${r.products.length} product(s) → ${r.cards.length} in-stock option(s) on the ${r.menuType.toLowerCase()} menu${r.usedRec ? '  ⚠ store has no medical menu — prices flagged “rec”' : ''}  [${r.store.address || r.store.id}]`);
+    const rows = r.cards.map((c) => normalizeListing({ dispensary: label, dispensaryId: disp.id, ...c }));
+    return { rows, menu: r.menuType === 'MEDICAL' ? 'med' : 'rec', source: 'api', error: rows.length ? null : 'store returned no products', products: r.products.length };
+  } catch (e) {
+    log(`   ✗ JARS API failed: ${e.message}`);
+    return { rows: [], menu: null, source: 'api', error: e.message };
+  }
+}
+const JARS_CATEGORY = { flower: 'FLOWER', 'pre-rolls': 'PRE_ROLLS', prerolls: 'PRE_ROLLS', concentrates: 'CONCENTRATES', vaporizers: 'VAPORIZERS', edibles: 'EDIBLES' };
+
+// -> { rows, menu, source, error }
 async function scrapeDispensary(context, disp, opts) {
   if (disp.platform === 'dutchie') return scrapeDutchie(context, disp, opts);
-  if (disp.platform === 'jars') {
-    // JARS is NOT scraped here. The inline `scrapeJars` geo-switch is unreliable
-    // (it can't switch off the IP-nearest store → e.g. Green Valley lands on a
-    // Phoenix store and "fails"). JARS is pulled the reliable way by jars-lists.js
-    // (landOnStoreMedical: address→Search-by-store-name→Shop Medical, verified)
-    // and combined by merge-strainpicker.js. Run `node run-flower-daily.js` for
-    // the full board. Here we FLAG and skip — never the broken inline path.
-    console.log(`   ⏭  ${disp.name}: not scraped inline (JARS = jars-lists.js + merge). See run-flower-daily.js.`);
-    return [];
-  }
-  console.log(`(skipping ${disp.name}: unknown platform "${disp.platform}")`);
-  return [];
+  if (disp.platform === 'jars') return scrapeJarsApi(disp, opts);
+  (opts.log || console.log)(`(skipping ${disp.name}: unknown platform "${disp.platform}")`);
+  return { rows: [], menu: null, source: null, error: `unknown platform "${disp.platform}"` };
 }
 
 // ---------------------------------------------------------------------------
@@ -1030,7 +1328,7 @@ const ppg = (n) => (n == null ? '  —  ' : `$${n.toFixed(2)}`);
 function printTable(ranked, dropped, opts) {
   console.log(`\n${'='.repeat(92)}`);
   console.log(
-    `BEST VALUE FLOWER — THC ≥ ${opts.minThc}%, sativa${opts.includeHybrid ? ' / sativa-hybrid / hybrid' : ' & sativa-dominant hybrid'} only`
+    `BEST VALUE ${(opts.category || 'flower').toUpperCase()} — THC ≥ ${opts.minThc}%, sativa${opts.includeHybrid ? ' / sativa-hybrid / hybrid' : ' & sativa-dominant hybrid'} only`
   );
   console.log(`ranked by REAL price per gram${opts.maxPpg != null ? ` (capped at $${opts.maxPpg}/g ≈ $${(opts.maxPpg * 28).toFixed(0)}/oz)` : ''}`);
   console.log('='.repeat(96));
@@ -1095,10 +1393,10 @@ function printTable(ranked, dropped, opts) {
   }
 }
 
-function writeJson(p, ranked, dropped, opts) {
+function writeJson(p, ranked, dropped, opts, coverage = []) {
   fs.writeFileSync(
     p,
-    JSON.stringify({ opts, generatedAt: new Date().toISOString(), count: ranked.length, results: ranked, droppedCount: dropped.length }, null, 2)
+    JSON.stringify({ opts, generatedAt: new Date().toISOString(), count: ranked.length, coverage, results: ranked, droppedCount: dropped.length }, null, 2)
   );
   console.log(`\nWrote JSON -> ${p}`);
 }
@@ -1238,6 +1536,79 @@ function selftest() {
   ], true);
   check('prefer-sativa: sativa first despite higher $/g', rankedS[0].name === 'pricySativa', rankedS[0].name);
 
+  // ---- 2026-11-14 additions ------------------------------------------------
+  // weights: decimal oz used to parse as "5 oz"; fused "1/8oz" is Dutchie's option format
+  check('0.5 oz = 14g (not 140g)', parseWeightGrams('0.5 oz').grams === 14, parseWeightGrams('0.5 oz').grams);
+  check('.5oz = 14g', parseWeightGrams('.5oz').grams === 14, parseWeightGrams('.5oz').grams);
+  check('1/8oz fused = 3.5g', parseWeightGrams('1/8oz').grams === 3.5);
+  check('1oz fused = 28g', parseWeightGrams('1oz').grams === 28);
+  // lineage: hyphenated labels (Dutchie data) — "Sativa-Hybrid" must NOT read as pure sativa
+  check('classify Sativa-Hybrid', classifyStrain('Sativa-Hybrid') === 'sativa_hybrid', classifyStrain('Sativa-Hybrid'));
+  check('classify Indica-Hybrid', classifyStrain('Indica-Hybrid') === 'indica_hybrid', classifyStrain('Indica-Hybrid'));
+  check('classify NOT_APPLICABLE = unknown', classifyStrain('') === 'unknown' && classifyStrain('N/A') === 'unknown');
+
+  // Dutchie product JSON -> rows
+  const dp = {
+    Name: 'DAZE OFF 14G PRE-GROUND | HEADBAND', brandName: 'Daze Off', strainType: 'Sativa', cName: 'daze-off-headband',
+    THCContent: { unit: 'PERCENTAGE', range: [31.78] }, Options: ['1/8oz', '1/2oz', '1oz'],
+    medicalPrices: [12, 30, 55], medicalSpecialPrices: [12, 24, 55], recPrices: [14, 34, 60], recSpecialPrices: [14, 34, 60],
+    optionsBelowThreshold: ['1oz'], special: true,
+    specialData: { saleSpecials: [{ specialName: 'Half Oz Friday' }], bogoSpecials: null },
+    POSMetaData: { children: [{ option: '1/2oz', quantityAvailable: 3 }] },
+  };
+  const dMed = dutchieProductToRaws(dp, 'med', 'store-x').map((r) => normalizeListing({ dispensary: 'T', ...r }));
+  check('dutchie: one row per in-stock option (1oz below threshold dropped)', dMed.length === 2, dMed.length);
+  const dHalf = dMed.find((r) => r.grams === 14) || {};
+  check('dutchie: half-oz = special $24 vs list $30', dHalf.charged === 24 && dHalf.original === 30 && dHalf.discountPct === 20 && dHalf.dealReal === true, `${dHalf.charged}/${dHalf.original}/${dHalf.discountPct}`);
+  check('dutchie: option weight wins over the "14G" in the name', (dMed.find((r) => r.charged === 12) || {}).grams === 3.5, (dMed.find((r) => r.charged === 12) || {}).grams);
+  check('dutchie: special == list is NOT a deal', (dMed.find((r) => r.grams === 3.5) || {}).dealReal === null);
+  check('dutchie: brand "Daze Off" no longer trips the ⚠ sniff', dMed.every((r) => r.dealReal !== false));
+  check('dutchie: stock + special name carried', dHalf.stock === 3 && (dHalf.specials || [])[0] === 'Half Oz Friday', JSON.stringify([dHalf.stock, dHalf.specials]));
+  check('dutchie: url from cName', dHalf.url === 'https://dutchie.com/embedded-menu/store-x/product/daze-off-headband', dHalf.url);
+  const dRec = dutchieProductToRaws(dp, 'rec', 'store-x').map((r) => normalizeListing({ dispensary: 'T', ...r }));
+  check('dutchie: rec menu uses rec prices', (dRec.find((r) => r.grams === 14) || {}).charged === 34, (dRec.find((r) => r.grams === 14) || {}).charged);
+  check('dutchie: medicalOnly product hidden on rec', dutchieProductToRaws({ ...dp, medicalOnly: true }, 'rec', 's').length === 0);
+  check('dutchie: THC keyed as mg on flower reads as %', dutchieThcPercent({ THCContent: { unit: 'MILLIGRAMS', range: [28.12] } }, 'flower').thc === 28.12);
+  check('dutchie: THC mg off-band stays unknown', dutchieThcPercent({ THCContent: { unit: 'MILLIGRAMS', range: [850] } }, 'flower').thc === null);
+  const dBundle = { ...dp, specialIdsPerOption: [{ option: '1/8oz', rewardIds: ['s1'] }, { option: '1/2oz', rewardIds: [] }],
+    specialData: { saleSpecials: [], bogoSpecials: [{ specialId: 's1', specialName: '8ths Bundle 4 for $39.99', menuType: 'both', bogoConditions: [], itemsForAPrice: { enabled: true, value: '39.99' }, bogoRewards: [{ totalQuantity: { enabled: true, quantity: 4 } }] }] } };
+  const dB = dutchieProductToRaws(dBundle, 'med', 's').map((r) => normalizeListing({ dispensary: 'T', ...r }));
+  const dB8 = dB.find((r) => r.grams === 3.5) || {};
+  check('dutchie: "4 for $39.99" bundle lands on the 1/8 option only', dB8.bundle && dB8.bundle.qty === 4 && approx(dB8.bundle.pricePerGram, 39.99 / 4 / 3.5) && !(dB.find((r) => r.grams === 14) || {}).bundle, JSON.stringify(dB8.bundle));
+  check('dutchie: bundle never changes the ranked $/g', approx(dB8.pricePerGram, 12 / 3.5), dB8.pricePerGram);
+  check('dutchie: THC rounded to 2 dp', dutchieThcPercent({ THCContent: { unit: 'PERCENTAGE', range: [28.6792] } }, 'flower').thc === 28.68);
+  check('dutchie: THC range -> lower bound', dutchieThcPercent({ THCContent: { unit: 'PERCENTAGE', range: [24.5, 29] } }, 'flower').thc === 24.5);
+
+  // JARS API product JSON -> rows
+  const jars = require('./jars-api.js');
+  const jp = [{
+    productName: 'Fenix Fuerzzza Supercharged 14g Pina Punch', brandName: 'Fenix', strainType: 'SATIVA_HYBRID', slug: 'fenix-pina-punch',
+    potencyThc: { unit: '%', range: [28.89] }, specials: [{ name: 'Fenix - $40 Supercharged Half Ounces' }, { name: 'Fenix - BOGO (MSRP) Supercharged Half Ounces Mix & Match' }],
+    variants: [
+      { option: '14g', priceMed: 70, specialPriceMed: 40, priceRec: 75, specialPriceRec: 45, quantity: 9 },
+      { option: '3.5g', priceMed: 20, specialPriceMed: 12, priceRec: 20, specialPriceRec: 12, quantity: 0 },
+    ],
+  }];
+  const jMed = jars.toRawCards(jp, { menuType: 'MEDICAL' }).map((r) => normalizeListing({ dispensary: 'JARS', ...r }));
+  check('jars: out-of-stock variant skipped', jMed.length === 1, jMed.length);
+  const j0 = jMed[0] || {};
+  check('jars: med sale $40 vs list $70 = $2.86/g, 43% verified', j0.charged === 40 && j0.original === 70 && approx(j0.pricePerGram, 40 / 14) && j0.discountPct === 43 && j0.dealReal === true, `${j0.charged}/${j0.original}/${j0.discountPct}`);
+  check('jars: 5-level lineage kept (SATIVA_HYBRID)', j0.strainBucket === 'sativa_hybrid' && j0.thc === 28.89 && j0.jars === true);
+  check('jars: BOGO (MSRP) = 2 for list price -> $2.50/g bundle', j0.bundle && j0.bundle.qty === 2 && approx(j0.bundle.pricePerGram, 35 / 14), JSON.stringify(j0.bundle));
+  check('jars: rec menu uses rec pair', jars.toRawCards(jp, { menuType: 'RECREATIONAL' })[0].priceText === '$45 | $75');
+  check('jars: "2 for $85" bundle', (jars.bundleFromSpecial('Mohave - 2 for $85 Select Halves', 59) || {}).unitPrice === 42.5);
+  check('jars: mixed bundle is label-only', jars.bundleFromSpecial('Mohave - 2 Reserve Eighths + 1 Select Eighth for $30', 25) === null);
+  check('jars: plain "$30 Half Ounces" is not a bundle', jars.bundleFromSpecial('Fleur - $30 Half Ounces', 70) === null);
+  // LZ-UTF8: "abc" + pointer(len 3, dist 3) -> "abcabc"; a real 2-byte UTF-8 char passes through
+  check('lzutf8 back-reference', jars.lzutf8Decode(Buffer.from([0x61, 0x62, 0x63, 0xc3, 0x03]).toString('base64')) === 'abcabc');
+  check('lzutf8 keeps real UTF-8', jars.lzutf8Decode(Buffer.from('café – ok', 'utf8').toString('base64')) === 'café – ok');
+
+  // Leafly cache: classifications stick, fresh misses stick, legacy/stale misses get re-checked
+  const lc = { a: { bucket: 'sativa' }, b: { miss: true, at: new Date().toISOString() }, c: null, d: { miss: true, at: '2020-01-01T00:00:00Z' } };
+  check('leafly cache: hit', cachedLeafly(lc, 'a') === lc.a);
+  check('leafly cache: fresh miss is trusted', cachedLeafly(lc, 'b') === null);
+  check('leafly cache: legacy null + stale miss are re-fetched', cachedLeafly(lc, 'c') === undefined && cachedLeafly(lc, 'd') === undefined && cachedLeafly(lc, 'zz') === undefined);
+
   console.log(`\n${pass}/${total} passed`);
   process.exit(pass === total ? 0 : 1);
 }
@@ -1254,9 +1625,13 @@ function loadDispensaries(opts) {
   }
   if (opts.only.length) {
     list = list.filter((d) => opts.only.includes(d.id) || opts.only.includes(d.slug));
-  } else if (!opts.includeVerify) {
-    // By default skip best-guess slugs so a first run doesn't look broken.
-    list = list.filter((d) => !d.verify);
+  } else {
+    // By default skip best-guess slugs so a first run doesn't look broken, and
+    // stores known to be gone (kept in the list, with the reason, so it's a
+    // visible decision rather than a silent hole).
+    if (!opts.includeVerify) list = list.filter((d) => !d.verify);
+    for (const d of list.filter((x) => x.disabled)) console.log(`(not checking ${d.name}: ${d.disabled})`);
+    list = list.filter((d) => !d.disabled);
   }
   return list;
 }
@@ -1265,15 +1640,15 @@ async function main() {
   const opts = parseArgs(process.argv);
   if (opts.selftest) return selftest();
 
-  if (!chromium) {
-    console.error('playwright is not installed. Run:  npm install playwright && npx playwright install chromium');
-    console.error('(You can still run the math checks with:  node weed-value-finder.js --selftest)');
-    process.exit(1);
-  }
-
   const dispensaries = loadDispensaries(opts);
   if (!dispensaries.length) {
     console.error('No dispensaries selected. Check --only ids or your --config file.');
+    process.exit(1);
+  }
+  // Only the Dutchie stores need a browser; JARS is plain HTTPS.
+  if (!chromium && dispensaries.some((d) => d.platform === 'dutchie')) {
+    console.error('playwright is not installed. Run:  npm install playwright && npx playwright install chromium');
+    console.error('(JARS-only runs and the math checks work without it:  --only jars-east-tucson  /  --selftest)');
     process.exit(1);
   }
 
@@ -1281,22 +1656,53 @@ async function main() {
   console.log(`Dispensaries (${dispensaries.length}): ${dispensaries.map((d) => d.name).join(', ')}`);
   if (!opts.includeVerify) console.log(`(unverified best-guess slugs skipped; add --include-unverified-slugs to try them)`);
 
-  const browser = await chromium.launch({ headless: !opts.headed });
-  const context = await makeContext(browser);
+  const needBrowser = dispensaries.some((d) => d.platform === 'dutchie');
+  const browser = needBrowser ? await chromium.launch({ headless: !opts.headed }) : null;
+  const context = browser ? await makeContext(browser) : null;
+
+  // Scrape stores a few at a time. Each store logs into its own buffer, printed
+  // whole when the store finishes, so parallel output stays readable. A store
+  // that comes back empty with an error gets one retry at the end.
+  const results = new Map(); // disp.id -> { rows, menu, source, error, ms }
+  const runOne = async (disp) => {
+    const buf = [];
+    const t0 = Date.now();
+    let r;
+    try { r = await scrapeDispensary(context, disp, { ...opts, log: (m) => buf.push(m) }); }
+    catch (e) { r = { rows: [], menu: null, source: null, error: e.message }; buf.push(`   error: ${e.message}`); }
+    r.ms = Date.now() - t0;
+    console.log(buf.join('\n'));
+    results.set(disp.id, r);
+  };
+  const pool = async (list, size) => {
+    let i = 0;
+    await Promise.all(Array.from({ length: Math.min(size, list.length) }, async () => {
+      while (i < list.length) {
+        const disp = list[i++];
+        await runOne(disp);
+        await new Promise((res) => setTimeout(res, 400 + Math.random() * 600)); // polite pacing
+      }
+    }));
+  };
+  await pool(dispensaries, opts.concurrency);
+  const failed = dispensaries.filter((d) => { const r = results.get(d.id); return !r.rows.length && r.error && !r.definitive; });
+  if (failed.length) {
+    console.log(`\n↻ retrying ${failed.length} store(s) that came back empty: ${failed.map((d) => d.name).join(', ')}`);
+    await pool(failed, 1);
+  }
+  if (browser) await browser.close();
 
   let all = [];
-  for (const disp of dispensaries) {
-    const rows = await scrapeDispensary(context, disp, opts);
-    all = all.concat(rows);
-    await new Promise((res) => setTimeout(res, 900 + Math.random() * 1200)); // polite pacing
-  }
-  await browser.close();
-
+  for (const disp of dispensaries) all = all.concat(results.get(disp.id).rows);
   console.log(`\nParsed ${all.length} total listing(s) across ${dispensaries.length} store(s).`);
   if (!opts.strictLineage) {
     // Preferred: actually look each hybrid/unknown strain up on Leafly.
     if (!opts.noStrainLookup) {
-      await resolveLeanViaLeafly(all, { log: (m) => console.log(m) });
+      await resolveLeanViaLeafly(all, {
+        log: (m) => console.log(m),
+        // lineage only matters for a listing that could otherwise make the board
+        only: (r) => r.pricePerGram != null && r.thc != null && r.thc >= opts.minThc && (opts.maxPpg == null || r.pricePerGram <= opts.maxPpg),
+      });
     }
     // Offline dictionary catches anything Leafly didn't resolve.
     all.forEach(applyLeanInference);
@@ -1310,21 +1716,32 @@ async function main() {
   const { kept, dropped } = applyFilters(deduped, opts);
   const ranked = rankListings(kept, opts.preferSativa);
 
-  printTable(ranked, dropped, opts);
-  if (opts.jsonOut) writeJson(opts.jsonOut, ranked, dropped, opts);
-  if (opts.csvOut) writeCsv(opts.csvOut, ranked);
+  // Per-store coverage: what was actually read, so a store that silently failed
+  // can never pass for "nothing qualified there today".
+  const coverage = dispensaries.map((d) => {
+    const r = results.get(d.id);
+    return {
+      id: d.id, name: d.name, platform: d.platform, ok: r.rows.length > 0, menu: r.menu, source: r.source,
+      listings: r.rows.length, qualified: ranked.filter((x) => x.dispensaryId === d.id).length,
+      error: r.rows.length ? null : (r.error || 'no listings'), ms: r.ms,
+    };
+  });
 
-  // Loud reminder: this tool is Dutchie-only. JARS is intentionally NOT scraped
-  // here (the inline geo-switch is unreliable — see scrapeDispensary). If JARS
-  // stores were in the list, tell the user this board is INCOMPLETE on its own.
-  // Silent under run-flower-daily.js, which pulls JARS live and merges it next.
-  if (!process.env.FLOWER_PIPELINE && dispensaries.some((d) => d.platform === 'jars')) {
-    console.log(`\n${'─'.repeat(92)}`);
-    console.log('⚠  DUTCHIE-ONLY RESULTS — JARS is NOT included in this run.');
-    console.log('   JARS (East Tucson + Green Valley) is pulled live by jars-lists.js and merged in.');
-    console.log('   For the COMPLETE board incl. JARS, run:  node run-flower-daily.js');
-    console.log(`${'─'.repeat(92)}`);
+  printTable(ranked, dropped, opts);
+  printCoverage(coverage);
+  if (opts.jsonOut) writeJson(opts.jsonOut, ranked, dropped, opts, coverage);
+  if (opts.csvOut) writeCsv(opts.csvOut, ranked);
+  if (!coverage.some((c) => c.ok)) { console.error('\nEvery store failed — nothing was read.'); process.exit(1); }
+}
+
+function printCoverage(coverage) {
+  console.log(`\nCOVERAGE — ${coverage.filter((c) => c.ok).length}/${coverage.length} stores read`);
+  for (const c of coverage) {
+    const how = c.ok ? `${String(c.listings).padStart(4)} listings, ${String(c.qualified).padStart(2)} qualify  (${c.menu}${c.source === 'dom' ? ', page-1 fallback' : ''}, ${(c.ms / 1000).toFixed(1)}s)` : `NOT READ — ${c.error}`;
+    console.log(`   ${c.ok ? '✓' : '✗'} ${c.name.padEnd(30)} ${how}`);
   }
+  const bad = coverage.filter((c) => !c.ok);
+  if (bad.length) console.log(`\n⚠  ${bad.length} store(s) were NOT read this run: ${bad.map((c) => c.name).join(', ')}. The board does not cover them.`);
 }
 
 if (require.main === module) {
@@ -1339,5 +1756,6 @@ module.exports = {
   parsePrices, inferSativaLean, applyLeanInference, classifyLeafly, cleanStrainName,
   // shared plumbing reused by sibling finders (e.g. preroll-value-finder.js)
   makeContext, gotoAndSettle, autoScroll, DUTCHIE_HARVEST, resolveLeanViaLeafly,
+  dutchieProductToRaws, dutchieThcPercent, dedupeListings,
   scrapeJars, BUCKET_LABEL, BUCKET_RANK, DISPENSARIES,
 };

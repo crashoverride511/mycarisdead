@@ -1,4 +1,10 @@
-# flower-daily.ps1 — scheduled daily FLOWER refresh (local, full incl. JARS).
+# flower-daily.ps1 - scheduled daily FLOWER refresh (local, full incl. JARS).
+#
+# KEEP THIS FILE PURE ASCII. Task Scheduler runs it with Windows PowerShell 5.1,
+# which reads a BOM-less file as ANSI: a UTF-8 em dash decodes to three chars
+# whose last is a curly quote, PowerShell treats that as a string terminator, and
+# the whole script fails to PARSE - it exits 1 before writing a single log line.
+# That is exactly how this task failed silently every morning until 2026-11-14.
 # 1) runs the data pipeline (run-flower-daily.js) 2) republishes the artifact.
 # Registered under Task Scheduler as "TucsonFlowerDaily" (run only when logged on,
 # so JARS's headed Chrome has an interactive desktop). Logs to flower-daily.log.
@@ -15,9 +21,16 @@ $url    = 'https://claude.ai/code/artifact/ec698d8e-25c9-400d-89e1-cbe01a1275ba'
 
 # 1) data pipeline -> tucson-flower.html
 & $node run-flower-daily.js *>> $log 2>&1
+$pipelineExit = $LASTEXITCODE
+if ($pipelineExit -ne 0) {
+  # Do not republish (or alert on) yesterday's page when today's run failed.
+  "PIPELINE FAILED (exit $pipelineExit) - not republishing; the published page keeps its old date and warns that it is stale." | Out-File -FilePath $log -Append -Encoding utf8
+  "===== done (FAILED) $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') =====" | Out-File -FilePath $log -Append -Encoding utf8
+  exit $pipelineExit
+}
 
 # 2) republish the same artifact URL (Artifact tool lives in Claude Code)
-$prompt = "Publish the file tucson-flower.html (in this directory) to the existing artifact at $url, keeping the same URL. Use the Artifact tool with the url parameter set to that address and favicon set to the herb emoji. Publish only — do not edit files, do not run the pipeline, do not touch any pre-roll artifact."
+$prompt ="Publish the file tucson-flower.html (in this directory) to the existing artifact at $url, keeping the same URL. Use the Artifact tool with the url parameter set to that address and favicon set to the herb emoji. Publish only - do not edit files, do not run the pipeline, do not touch any pre-roll artifact."
 & $claude -p $prompt --dangerously-skip-permissions *>> $log 2>&1
 
 # 3) desktop alert if a NEW better-than-$88/oz deal was found
@@ -25,7 +38,7 @@ try {
   $a = Get-Content (Join-Path $dir 'flower-alert.json') -Raw | ConvertFrom-Json
   if ($a.isNew) {
     $title = "Tucson Flower: deal under `$$($a.threshold)/oz"
-    $body  = "`$$($a.oz)/oz · $($a.thc)% · $($a.name) @ $($a.dispensary)"
+    $body  = "`$$($a.oz)/oz | $($a.thc)% | $($a.name) @ $($a.dispensary)"
     "ALERT fired: $body" | Out-File -FilePath $log -Append -Encoding utf8
     # Prefer a native toast; fall back to a tray balloon that needs no install.
     try {
