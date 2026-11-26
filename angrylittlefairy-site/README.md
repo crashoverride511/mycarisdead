@@ -12,9 +12,12 @@ Keep each under ~500 KB (export at ~2000px on the long side, quality 75-80).
 ## Edit text and links
 Search `index.html` for `EDIT:` to find the tagline, social URLs/handles, bio, stats and email.
 
-## Deploy (Cloudflare Pages)
-Workers & Pages > Create > Pages > Upload assets, drag in this folder, then
-Custom domains > add `angrylittlefairy.com`.
+## Deploy
+Live at https://angrylittlefairy.com as the Cloudflare Worker `angrylittlefairy`
+(www redirects to the bare domain). After editing `index.html`, run `python3 deploy.py`.
+
+Photos: the Worker only serves the page right now, so images in `images/` won't show
+until they're hosted (next step: an R2 bucket, or move to Pages with Git).
 
 ## Email
 Email Routing on the domain: create `bookings@angrylittlefairy.com` and forward it to her inbox.
