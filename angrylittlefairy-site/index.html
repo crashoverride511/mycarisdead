@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alyssa · @angrylittlefairy</title>
+<title>Alyssa (@angrylittlefairy) · Model &amp; Creator</title>
 <meta name="description" content="Alyssa, aka @angrylittlefairy. Model, creator and a sweet little fae. She feeds.">
 <meta property="og:title" content="Alyssa · @angrylittlefairy">
 <meta property="og:description" content="Model, creator and a sweet little fae. She feeds.">
@@ -190,6 +190,24 @@
   .fine { margin-top: 22px; font-size: 13px; color: var(--muted); letter-spacing: .04em; }
   .tribute { background: linear-gradient(180deg, transparent, rgba(255,95,162,.05) 40%, transparent); }
 
+  /* how to approach */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 28px; }
+  .step { padding: 24px 0; border-top: 1px solid var(--line); }
+  .step b { display: block; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 40px; line-height: 1; margin-bottom: 12px; }
+  .step p { color: var(--body-text); }
+  .step strong { color: var(--ink); font-weight: 600; }
+
+  /* chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 22px; }
+  .chips span { font-size: 12px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; padding: 6px 12px; border: 1px solid var(--line); color: var(--ink); background: var(--surface); }
+  .reply { font-size: 14px; color: var(--muted); }
+
+  /* footer socials */
+  .foot-social { display: inline-flex; gap: 14px; }
+  .foot-social a { width: 20px; height: 20px; color: var(--muted); transition: color .2s; }
+  .foot-social a:hover { color: var(--pink); }
+  .foot-social svg { width: 100%; height: 100%; }
+
   /* gallery */
   .gallery { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 260px; gap: 14px; }
   .gallery .ph { cursor: zoom-in; }
@@ -225,7 +243,7 @@
   .contact p { color: var(--muted); margin: 20px auto 40px; max-width: 40ch; }
 
   footer { border-top: 1px solid var(--line); padding: 32px 0; color: var(--muted); font-size: 14px; }
-  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
   footer em { font-family: var(--serif); color: var(--ink); }
 
   /* overlays live outside the flipping page */
@@ -245,7 +263,8 @@
     .hero { padding: 40px 0 64px; }
     .hero .wrap, .about .wrap { grid-template-columns: 1fr; gap: 44px; }
     .hero-media { max-width: 440px; }
-    .links, .links.two { grid-template-columns: 1fr; }
+    .links, .links.two, .steps { grid-template-columns: 1fr; }
+    .steps { gap: 0; }
     .gallery { grid-template-columns: 1fr 1fr; grid-auto-rows: 200px; }
     .gallery .wide { grid-column: span 2; }
     .gallery .wide:last-child { grid-column: span 1; }
@@ -360,13 +379,17 @@
           <!-- EDIT: sweet side bio -->
           <p>Model, creator and professional sweetheart. I shoot editorial, glam and soft fantasy, and I'm always up for something pretty and a little bit strange.</p>
           <p>Photographers, brands and collabs, I'd love to hear from you.</p>
+          <!-- EDIT: what she's available for -->
+          <div class="chips"><span>Photoshoots</span><span>Brand collabs</span><span>Content creation</span><span>Cosplay &amp; fantasy</span></div>
           <!-- EDIT: email -->
           <a class="btn btn-primary" href="mailto:hello@angrylittlefairy.com?subject=Hi%20Alyssa">Work with me</a>
+          <!-- EDIT: reply time -->
+          <p class="reply" style="margin-top:14px">Include dates, location and the vibe. I usually reply within a few days.</p>
         </div>
       </div>
     </section>
 
-    <section class="teaser">
+    <section class="teaser" data-nosnippet>
       <div class="wrap">
         <div class="card">
           <p class="eyebrow">18+ only</p>
@@ -381,13 +404,14 @@
   <footer>
     <div class="wrap">
       <span>© <span class="yr">2026</span> Alyssa · @angrylittlefairy</span>
+      <span class="foot-social"><a href="https://instagram.com/angrylittlefairy" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none"/></svg></a><a href="https://www.tiktok.com/@angrylittlefairy" target="_blank" rel="noopener" aria-label="TikTok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.4 2.6 2.2 4.4 5 4.6"/></svg></a></span>
       <em>Don't poke the fairy.</em>
     </div>
   </footer>
 </div>
 
 <!-- ============ WICKED SIDE (18+) ============ -->
-<div class="face dark" id="dark" aria-hidden="true">
+<div class="face dark" id="dark" aria-hidden="true" data-nosnippet>
   <nav>
     <div class="wrap">
       <a href="#d-top" class="mark shimmer-text">angry little fairy</a>
@@ -465,6 +489,12 @@
           <h2>Settle your <em class="shimmer-text">tab.</em></h2>
           <p class="section-note">You ate at her table. Now you pay, and you keep paying. Tribute first, then you may speak.</p>
         </div>
+        <!-- EDIT: minimum first tribute -->
+        <div class="steps">
+          <div class="step"><b class="shimmer-text">01</b><p><strong>Tribute first.</strong> Your first offering is $TBD minimum. Anything less is ignored.</p></div>
+          <div class="step"><b class="shimmer-text">02</b><p><strong>Then message.</strong> Email or DM with your name and your receipt. No receipt, no reply.</p></div>
+          <div class="step"><b class="shimmer-text">03</b><p><strong>Then wait.</strong> I'll reach you when I'm ready. Begging doesn't make it faster.</p></div>
+        </div>
         <div class="links two">
           <!-- EDIT: wishlist URL (Throne etc.) -->
           <a class="link-card hot" href="#" target="_blank" rel="noopener">
@@ -527,7 +557,7 @@
       <div class="wrap">
         <p class="eyebrow">Serious inquiries only</p>
         <h2>Apply to <em class="shimmer-text">serve.</em></h2>
-        <p>Tell me who you are and what you can afford. Lead with a tribute or don't bother.</p>
+        <p>Tell me who you are and what you can afford. Applications with a tribute get read first. Everything else waits, or doesn't.</p>
         <!-- EDIT: email -->
         <a class="btn btn-primary" href="mailto:serve@angrylittlefairy.com?subject=Application">serve@angrylittlefairy.com</a>
       </div>
@@ -537,6 +567,7 @@
   <footer>
     <div class="wrap">
       <span>© <span class="yr">2026</span> Alyssa · @angrylittlefairy · 18+ only</span>
+      <span class="foot-social"><a href="https://instagram.com/angrylittlefairy" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none"/></svg></a><a href="https://www.tiktok.com/@angrylittlefairy" target="_blank" rel="noopener" aria-label="TikTok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.4 2.6 2.2 4.4 5 4.6"/></svg></a><a href="https://onlyfans.com/angrylittlefairy" target="_blank" rel="noopener" aria-label="OnlyFans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg></a></span>
       <em>You ate. You stay. You pay.</em>
     </div>
   </footer>
@@ -547,7 +578,7 @@
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5fa2"/><stop offset=".5" stop-color="#c9a7ff"/><stop offset="1" stop-color="#9ff0e0"/></linearGradient></defs></svg>
 
-<div class="gate dark" id="gate" hidden>
+<div class="gate dark" id="gate" hidden data-nosnippet>
   <div class="gate-box">
     <p class="eyebrow">Adults only</p>
     <h2>Are you <em class="shimmer-text">18<span style="font-family:var(--sans);font-style:normal;font-weight:500">+</span>?</em></h2>
