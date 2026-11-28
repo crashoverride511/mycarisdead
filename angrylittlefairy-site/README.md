@@ -14,10 +14,18 @@ Keep each under ~500 KB (export at ~2000px on the long side, quality 75-80).
 The page opens on the sweet side. Any "other side" button shows the 18+ gate once per browser,
 then the whole page flips to the wicked side. `angrylittlefairy.com/#wicked` links straight there (gate still applies).
 
+## Sweet side extras
+- Built as the mirror of the wicked side: "She / feeds." in pearly rose and violet against "You / pay." in latex pink.
+- A rose gold and pink enamel heart charm ("Mostly harmless") swings on her photo; pearl strands tied with satin bows divide the sections.
+- Satin ribbons under the hero ("pull up a chair ✦ have a bite ✦ stay a while" over "Welcome") flip into the leather straps ("you ate ✦ you stay ✦ you pay" over "Owned").
+- "The Fairy's Table" menu card lists what she offers and holds the Work with me button.
+- Hidden words under the cursor ("come closer", "have a bite", "you look hungry").
+- Her real name is not used anywhere. The persona is "the fairy" / @angrylittlefairy.
+
 ## Wicked side extras
 - Look: black latex and satin, hard pink, purple and chrome. Red only shows up as blood: the drips off "pay." and a faint glow.
 - "pay." in the hero is an inline SVG drawn from Bodoni Moda's real glyph outlines, so the blood drips leave the letters along their own edges (foot of the "a", bottom of the period). To rebuild it after changing the drips: `python3 tools/glyphs.py <BodoniModa-Italic.woff2> instance.ttf pay.json` then `python3 tools/build_pay.py pay.json pay.svg.html`, and paste the SVG over the old one.
-- Her photo wears a chrome heart collar tag that says "Property of Alyssa". Chain-and-heart-padlock dividers sit between sections.
+- Her photo wears a chrome heart collar tag that says "Property of the Fae". Chain-and-heart-padlock dividers sit between sections.
 - "Settle your tab" shows a black card owned by her (number ends in MINE, valid thru forever) that tilts toward the cursor.
 - Hidden words ("mine", "obey", "you're mine", "good little wallet") sit behind the hero and only show under the cursor. On phones the light drifts on its own.
 - An "incoming call from Owner" pops up once per visit, 9 seconds after crossing over. Answer scrolls to tribute; decline says "Declining costs extra."
