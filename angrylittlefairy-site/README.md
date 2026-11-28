@@ -27,7 +27,7 @@ then the whole page flips to the wicked side. `angrylittlefairy.com/#wicked` lin
 - "pay." in the hero is an inline SVG drawn from Bodoni Moda's real glyph outlines, so the blood drips leave the letters along their own edges (foot of the "a", bottom of the period). To rebuild it after changing the drips: `python3 tools/glyphs.py <BodoniModa-Italic.woff2> instance.ttf pay.json` then `python3 tools/build_pay.py pay.json pay.svg.html`, and paste the SVG over the old one.
 - Her photo wears a chrome heart collar tag that says "Property of the Fae". Chain-and-heart-padlock dividers sit between sections.
 - "Settle your tab" shows a black card owned by her (number ends in MINE, valid thru forever) that tilts toward the cursor.
-- Hidden words ("mine", "obey", "you're mine", "good little wallet") sit behind the hero and only show under the cursor. On phones the light drifts on its own.
+- Orders ("kneel · pay · obey", "eyes down · wallet open", "don't make me ask twice", "send it now"...) sit behind the whole wicked side and only show under the cursor. On phones the light drifts on its own.
 - An "incoming call from Owner" pops up once per visit, 9 seconds after crossing over. Answer scrolls to tribute; decline says "Declining costs extra."
 - The minimum tribute (`$TBD`) appears twice: in step 01 and under the card.
 - Everything animated respects the phone's reduce-motion setting.

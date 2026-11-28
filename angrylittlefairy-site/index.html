@@ -96,7 +96,7 @@
   @keyframes shimmer { to { background-position: 200% center; } }
 
   /* the flip */
-  .stage { perspective: 2400px; }
+  body.flipping .stage { perspective: 2400px; } /* only while flipping, so fixed layers stay pinned to the screen */
   .flipper { display: grid; }
   body.flipping .flipper { transform-style: preserve-3d; }
   .face {
@@ -335,6 +335,19 @@
   :is(.dark, .teaser) .btn-primary { background: var(--latex-soft); color: var(--btn-ink); box-shadow: inset 0 1px 0 rgba(255,255,255,.45); }
   :is(.dark, .teaser) .btn-ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px rgba(248,239,244,.5); }
   :is(.dark, .teaser) .btn-ghost:hover { color: var(--pink); box-shadow: inset 0 0 0 1px var(--pink); filter: none; }
+
+  /* orders that only show where you look, across the whole wicked side */
+  .face.dark { position: relative; z-index: 0; }
+  .commands {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; padding-top: 64px;
+    display: flex; flex-direction: column; justify-content: space-around;
+    font-family: var(--serif); font-weight: 500; font-size: clamp(42px, 6.2vw, 92px); line-height: 1; letter-spacing: .05em;
+    text-transform: uppercase; white-space: nowrap; color: var(--pink); opacity: .5;
+    -webkit-mask-image: radial-gradient(circle 250px at var(--cx, -999px) var(--cy, -999px), #000 0%, rgba(0,0,0,.4) 50%, transparent 100%);
+            mask-image: radial-gradient(circle 250px at var(--cx, -999px) var(--cy, -999px), #000 0%, rgba(0,0,0,.4) 50%, transparent 100%);
+  }
+  .commands span:nth-child(even) { transform: translateX(-18%); }
+  body.flipping .commands { display: none; }
 
   /* hero */
   .dark .hero { position: relative; overflow: hidden; padding: 64px 0 88px; }
@@ -790,6 +803,17 @@
 
 <!-- ============ WICKED SIDE (18+) ============ -->
 <div class="face dark" id="dark" aria-hidden="true" data-nosnippet>
+  <div class="commands" aria-hidden="true">
+    <span>kneel · pay · obey · kneel · pay · obey · kneel</span>
+    <span>eyes down · wallet open · eyes down · wallet open</span>
+    <span>don't make me ask twice · don't make me ask twice</span>
+    <span>send it now · send it now · send it now · send it now</span>
+    <span>on your knees · empty it · on your knees · empty it</span>
+    <span>beg for it · say please · beg for it · say please</span>
+    <span>you're mine · obey · you're mine · obey · you're mine</span>
+    <span>tribute first · tribute first · tribute first</span>
+    <span>pay · kneel · obey · pay · kneel · obey · pay · kneel</span>
+  </div>
   <nav>
     <div class="wrap">
       <a href="#d-top" class="mark shimmer-text">angry little fairy</a>
@@ -804,13 +828,6 @@
 
   <main id="d-top">
     <header class="hero">
-      <div class="whisper" aria-hidden="true">
-        <span>mine · obey · kneel · pay · mine · obey · kneel</span>
-        <span>you're mine you're mine you're mine</span>
-        <span>kneel · pay · obey · mine · kneel · pay · obey</span>
-        <span>good little wallet · good little wallet</span>
-        <span>mine · obey · kneel · pay · mine · obey · kneel</span>
-      </div>
       <div class="wrap">
         <div>
           <p class="eyebrow">Findom · Owner · Fae</p>
@@ -1189,6 +1206,18 @@
           spot(hero, hero.clientWidth * (.5 + .4 * Math.sin(t / 2300)), hero.clientHeight * (.5 + .36 * Math.sin(t / 1700 + 1)));
         }
       });
+      requestAnimationFrame(drift);
+    })(0);
+  })();
+
+  // orders follow the cursor anywhere on the wicked side (drifting on phones)
+  (function () {
+    const layer = document.querySelector('.commands'); if (!layer) return;
+    const set = (x, y) => { layer.style.setProperty('--cx', x + 'px'); layer.style.setProperty('--cy', y + 'px'); };
+    addEventListener('pointermove', e => { if (body.dataset.side === 'dark') set(e.clientX, e.clientY); }, { passive: true });
+    if (reduce || !touch) return;
+    (function drift(t) {
+      if (body.dataset.side === 'dark') set(innerWidth * (.5 + .4 * Math.sin(t / 2600)), innerHeight * (.5 + .38 * Math.sin(t / 1900 + 1)));
       requestAnimationFrame(drift);
     })(0);
   })();
