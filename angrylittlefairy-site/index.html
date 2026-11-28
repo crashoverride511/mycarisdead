@@ -419,6 +419,8 @@
   .dark .link-card.solid:hover { background: var(--latex-soft); filter: brightness(1.1); }
 
   /* settle your tab */
+  .dark .hero .hero-tab { display: block; margin-top: 80px; padding-top: 56px; border-top: 1px solid rgba(255,45,138,.22); }
+  .flip-btn.nope { animation: shake .45s; }
   .tab-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 64px; align-items: center; }
   .dark .steps { grid-template-columns: 1fr; gap: 0; }
   .dark .step { display: grid; grid-template-columns: 76px 1fr; gap: 16px; align-items: baseline; padding: 20px 0; }
@@ -581,6 +583,7 @@
     .hero .wrap, .about .wrap, .dark .hero .wrap, .tab-grid { grid-template-columns: 1fr; gap: 44px; }
     .hero-media { max-width: 440px; }
     .dark .hero-media, .light .hero-media { justify-self: start; }
+    .dark .hero .hero-tab { margin-top: 56px; padding-top: 40px; }
     .links, .links.two, .steps { grid-template-columns: 1fr; }
     .steps { gap: 0; }
     .gallery { grid-template-columns: 1fr 1fr; grid-auto-rows: 200px; }
@@ -839,52 +842,7 @@
           </div>
         </div>
       </div>
-    </header>
-
-    <div class="bands" aria-hidden="true">
-      <div class="band band-a"><div class="track"><span>you ate ✦ you stay ✦ you pay ✦ you ate ✦ you stay ✦ you pay ✦ you ate ✦ you stay ✦ you pay ✦</span><span>you ate ✦ you stay ✦ you pay ✦ you ate ✦ you stay ✦ you pay ✦ you ate ✦ you stay ✦ you pay ✦</span></div></div>
-      <div class="band band-b"><div class="track"><span>Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦</span><span>Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦</span></div></div>
-    </div>
-
-    <section id="d-links">
-      <div class="wrap">
-        <div class="section-head reveal">
-          <h2><span class="kick">Follow. Subscribe.</span> <em>Obey.</em></h2>
-          <p class="section-note">Keep your wallet close. It won't be yours for long.</p>
-        </div>
-        <div class="links reveal">
-          <!-- EDIT: Instagram URL + handle -->
-          <a class="link-card" href="https://instagram.com/angrylittlefairy" target="_blank" rel="noopener">
-            <div class="top">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1" fill="#ff2d8a" stroke="none"/></svg>
-              <span class="arrow">↗</span>
-            </div>
-            <div><div class="platform">Instagram</div><div class="at">@angrylittlefairy</div></div>
-          </a>
-          <!-- EDIT: TikTok URL + handle -->
-          <a class="link-card" href="https://www.tiktok.com/@angrylittlefairy" target="_blank" rel="noopener">
-            <div class="top">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.4 2.6 2.2 4.4 5 4.6"/></svg>
-              <span class="arrow">↗</span>
-            </div>
-            <div><div class="platform">TikTok</div><div class="at">@angrylittlefairy</div></div>
-          </a>
-          <!-- EDIT: OnlyFans or Fansly URL + handle -->
-          <a class="link-card" href="https://onlyfans.com/angrylittlefairy" target="_blank" rel="noopener">
-            <div class="top">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.2v2.6" stroke-linecap="round"/></svg>
-              <span class="tag">18+</span>
-            </div>
-            <div><div class="platform">OnlyFans</div><div class="at">@angrylittlefairy</div></div>
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <div class="chain-wrap" aria-hidden="true"><div class="chain"></div><svg class="lock" viewBox="0 0 38 46"><use href="#heartlock"/></svg></div>
-
-    <section id="d-tribute">
-      <div class="wrap">
+      <div class="wrap hero-tab" id="d-tribute">
         <div class="section-head reveal">
           <h2><span class="kick">Settle your</span> <em>tab.</em></h2>
           <p class="section-note">You ate at my table. Now you pay, and you keep paying. Tribute first, then you may speak.</p>
@@ -937,9 +895,49 @@
           </div>
         </div>
       </div>
+    </header>
+
+    <div class="bands" aria-hidden="true">
+      <div class="band band-a"><div class="track"><span>you ate ✦ you stay ✦ you pay ✦ you ate ✦ you stay ✦ you pay ✦ you ate ✦ you stay ✦ you pay ✦</span><span>you ate ✦ you stay ✦ you pay ✦ you ate ✦ you stay ✦ you pay ✦ you ate ✦ you stay ✦ you pay ✦</span></div></div>
+      <div class="band band-b"><div class="track"><span>Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦</span><span>Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦</span></div></div>
+    </div>
+
+    <section id="d-links">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2><span class="kick">Follow. Subscribe.</span> <em>Obey.</em></h2>
+          <p class="section-note">Keep your wallet close. It won't be yours for long.</p>
+        </div>
+        <div class="links reveal">
+          <!-- EDIT: Instagram URL + handle -->
+          <a class="link-card" href="https://instagram.com/angrylittlefairy" target="_blank" rel="noopener">
+            <div class="top">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1" fill="#ff2d8a" stroke="none"/></svg>
+              <span class="arrow">↗</span>
+            </div>
+            <div><div class="platform">Instagram</div><div class="at">@angrylittlefairy</div></div>
+          </a>
+          <!-- EDIT: TikTok URL + handle -->
+          <a class="link-card" href="https://www.tiktok.com/@angrylittlefairy" target="_blank" rel="noopener">
+            <div class="top">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.4 2.6 2.2 4.4 5 4.6"/></svg>
+              <span class="arrow">↗</span>
+            </div>
+            <div><div class="platform">TikTok</div><div class="at">@angrylittlefairy</div></div>
+          </a>
+          <!-- EDIT: OnlyFans or Fansly URL + handle -->
+          <a class="link-card" href="https://onlyfans.com/angrylittlefairy" target="_blank" rel="noopener">
+            <div class="top">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.2v2.6" stroke-linecap="round"/></svg>
+              <span class="tag">18+</span>
+            </div>
+            <div><div class="platform">OnlyFans</div><div class="at">@angrylittlefairy</div></div>
+          </a>
+        </div>
+      </div>
     </section>
 
-    <div class="chain-wrap" aria-hidden="true"><div class="chain up"></div><svg class="lock" viewBox="0 0 38 46"><use href="#heartlock"/></svg></div>
+    <div class="chain-wrap" aria-hidden="true"><div class="chain"></div><svg class="lock" viewBox="0 0 38 46"><use href="#heartlock"/></svg></div>
 
     <section id="d-gallery">
       <div class="wrap">
@@ -1141,7 +1139,22 @@
     flipper.addEventListener('animationend', e => { if (e.target === flipper) done(); });
     setTimeout(done, 1400);
   }
-  document.querySelectorAll('[data-flip]').forEach(b => b.addEventListener('click', () => flip(b.dataset.flip)));
+  // leaving the wicked side takes three tries
+  const leaveLines = ['Leaving so soon?', 'You ate. Remember?', 'Fine. Run along.'];
+  let leaveTries = 0;
+  document.querySelectorAll('[data-flip]').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.flip === 'light' && body.dataset.side === 'dark' && !busy) {
+      if (!b.dataset.label) b.dataset.label = b.textContent;
+      b.textContent = leaveLines[Math.min(leaveTries, 2)];
+      b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope');
+      if (++leaveTries < 3) return;
+      leaveTries = 0;
+      setTimeout(() => flip('light'), 600);
+      setTimeout(() => { b.textContent = b.dataset.label; }, 2000);
+      return;
+    }
+    flip(b.dataset.flip);
+  }));
   document.getElementById('gate-yes').addEventListener('click', () => {
     adultOk = true; // remembered for this visit even if storage is blocked
     try { localStorage.setItem('alf-18', '1'); } catch (e) {}
