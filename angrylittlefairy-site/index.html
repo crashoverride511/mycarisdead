@@ -15,11 +15,13 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧚</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --serif: "Bodoni Moda", "Didot", Georgia, serif;
     --sans: "Space Grotesk", system-ui, sans-serif;
+    --scream: "Anton", "Impact", "Arial Narrow", sans-serif;
+    --mono: "Space Mono", ui-monospace, monospace;
     --notch: 18px;
   }
   /* sweet side */
@@ -43,30 +45,31 @@
       linear-gradient(160deg, #ffe9f2, #f3e6ff);
     --ph-label: rgba(59,36,49,.38);
     --btn-ink: #ffffff;
+    --shimmer: linear-gradient(110deg, var(--pink) 0%, var(--lilac) 45%, var(--mint) 100%);
   }
-  /* wicked side */
+  /* wicked side: black, blood red, hard pink, purple */
   .dark, .teaser {
-    --bg: #0d0a10;
-    --surface: #16111b;
-    --surface-2: #1e1724;
-    --line: #2e2436;
-    --ink: #f6eef5;
-    --muted: #a8999f;
-    --body-text: #d8ccd6;
-    --pink: #ff5fa2;
-    --lilac: #c9a7ff;
-    --mint: #9ff0e0;
-    --nav-bg: rgba(13,10,16,.74);
-    --glow-1: rgba(255,95,162,.16);
-    --glow-2: rgba(159,240,224,.08);
+    --bg: #050203;
+    --surface: #0b0405;
+    --surface-2: #14070a;
+    --line: #2a0c11;
+    --ink: #f4ece8;
+    --muted: #9b8084;
+    --body-text: #d6c6c3;
+    --red: #f01426;
+    --pink: #ff1f6d;
+    --purple: #9b30ff;
+    --nav-bg: rgba(5,2,3,.84);
+    --glow-1: rgba(240,20,38,.2);
+    --glow-2: rgba(155,48,255,.14);
     --ph-bg:
-      radial-gradient(circle at 30% 20%, rgba(255,95,162,.35), transparent 55%),
-      radial-gradient(circle at 75% 80%, rgba(159,240,224,.22), transparent 55%),
-      linear-gradient(160deg, #241a2c, #120d16);
-    --ph-label: rgba(246,238,245,.4);
-    --btn-ink: #1a0d14;
+      radial-gradient(circle at 30% 20%, rgba(240,20,38,.32), transparent 55%),
+      radial-gradient(circle at 75% 85%, rgba(155,48,255,.22), transparent 55%),
+      linear-gradient(160deg, #1a0609, #060203);
+    --ph-label: rgba(244,236,232,.34);
+    --btn-ink: #0a0304;
+    --shimmer: linear-gradient(100deg, var(--red) 0%, var(--pink) 50%, var(--purple) 100%);
   }
-  .light, .dark, .teaser { --shimmer: linear-gradient(110deg, var(--pink) 0%, var(--lilac) 45%, var(--mint) 100%); }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -74,8 +77,8 @@
     -webkit-font-smoothing: antialiased; overflow-x: hidden;
     background: #fff4f8; transition: background-color .4s;
   }
-  body[data-side="dark"] { background: #0d0a10; }
-  body.flipping { background: #1a1020; overflow: hidden; }
+  body[data-side="dark"] { background: #050203; }
+  body.flipping { background: #050203; overflow: hidden; }
   a { color: inherit; text-decoration: none; }
   button { font: inherit; border: 0; cursor: pointer; }
   img { display: block; max-width: 100%; }
@@ -89,7 +92,8 @@
 
   /* the flip */
   .stage { perspective: 2400px; }
-  .flipper { display: grid; transform-style: preserve-3d; }
+  .flipper { display: grid; }
+  body.flipping .flipper { transform-style: preserve-3d; }
   .face {
     grid-area: 1 / 1; min-height: 100vh; color: var(--ink);
     background:
@@ -138,7 +142,7 @@
     display: inline-flex; align-items: center; gap: 10px;
     padding: 15px 26px; font-size: 14px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
     clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
-    transition: transform .2s, filter .2s;
+    transition: transform .2s, filter .2s, background .2s, color .2s, box-shadow .2s;
   }
   .btn:hover { transform: translateY(-2px); filter: brightness(1.08); }
   .btn-primary { background: var(--shimmer); color: var(--btn-ink); }
@@ -176,19 +180,17 @@
     position: relative; display: flex; flex-direction: column; gap: 28px; padding: 28px;
     background: var(--surface); border: 1px solid var(--line);
     clip-path: polygon(0 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%);
-    transition: border-color .25s, transform .25s, background .25s;
+    transition: border-color .25s, transform .25s, background .25s, color .25s;
   }
   .link-card:hover { border-color: var(--pink); transform: translateY(-4px); background: var(--surface-2); }
-  .link-card.hot { border-color: rgba(255,95,162,.45); }
   .link-card .top { display: flex; justify-content: space-between; align-items: center; }
-  .link-card svg.icon { width: 34px; height: 34px; }
+  .link-card svg.icon { width: 34px; height: 34px; transition: stroke .25s; }
   .link-card .arrow { font-size: 22px; color: var(--muted); transition: transform .25s, color .25s; }
   .link-card:hover .arrow { transform: translate(4px, -4px); color: var(--pink); }
   .platform { font-family: var(--serif); font-size: 32px; line-height: 1; }
-  .at { color: var(--muted); font-size: 15px; margin-top: 6px; }
+  .at { color: var(--muted); font-size: 15px; margin-top: 6px; transition: color .25s; }
   .tag { font-size: 11px; font-weight: 600; letter-spacing: .14em; padding: 4px 8px; border: 1px solid var(--pink); color: var(--pink); }
   .fine { margin-top: 22px; font-size: 13px; color: var(--muted); letter-spacing: .04em; }
-  .tribute { background: linear-gradient(180deg, transparent, rgba(255,95,162,.05) 40%, transparent); }
 
   /* how to approach */
   .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 28px; }
@@ -220,22 +222,6 @@
   .about .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; }
   .about p { color: var(--body-text); margin-bottom: 18px; max-width: 52ch; }
   .about .btn { margin-top: 12px; }
-  .stats { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); margin-top: 12px; }
-  .stat { padding: 18px 12px 18px 0; border-bottom: 1px solid var(--line); }
-  .stat dt { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
-  .stat dd { font-family: var(--serif); font-size: 24px; margin-top: 4px; line-height: 1.25; }
-
-  /* the peek at the wicked side, on the sweet side */
-  .teaser .card {
-    position: relative; overflow: hidden; text-align: center; color: var(--ink); padding: 88px 24px;
-    background:
-      radial-gradient(circle at 15% 10%, rgba(255,95,162,.28), transparent 50%),
-      radial-gradient(circle at 85% 90%, rgba(159,240,224,.14), transparent 50%),
-      var(--bg);
-    clip-path: polygon(0 0, calc(100% - 40px) 0, 100% 40px, 100% 100%, 40px 100%, 0 calc(100% - 40px));
-  }
-  .teaser h2 { font-size: clamp(44px, 7vw, 92px); }
-  .teaser p.sub { color: var(--muted); margin: 18px auto 34px; max-width: 38ch; }
 
   /* contact */
   .contact { text-align: center; padding: 120px 0; }
@@ -246,23 +232,267 @@
   footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
   footer em { font-family: var(--serif); color: var(--ink); }
 
+  /* ================= WICKED SIDE ================= */
+  :is(.dark, .teaser) h1, :is(.dark, .teaser) h2 {
+    font-family: var(--scream); font-weight: 400; text-transform: uppercase; letter-spacing: .01em; line-height: .9;
+  }
+  :is(.dark, .teaser) h2 em {
+    font-family: var(--serif); font-style: italic; font-weight: 400; text-transform: none; letter-spacing: -.03em; color: var(--pink);
+  }
+  .dark h2 { font-size: clamp(52px, 8vw, 112px); }
+  :is(.dark, .teaser) .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .3em; color: var(--red); }
+
+  .dark nav { border-bottom-color: rgba(240,20,38,.35); }
+  .dark .mark { font-family: var(--scream); font-style: normal; text-transform: uppercase; letter-spacing: .08em; font-size: 20px; }
+  .dark .nav-links { font-family: var(--mono); font-size: 12px; }
+  .dark .nav-links a:hover { color: var(--red); }
+  .dark .flip-btn { background: transparent; color: var(--red); border-color: var(--red); font-family: var(--mono); }
+  .dark .flip-btn:hover { background: var(--red); color: var(--btn-ink); }
+
+  :is(.dark, .teaser) .btn { font-weight: 700; letter-spacing: .18em; }
+  :is(.dark, .teaser) .btn-primary { background: var(--red); color: var(--btn-ink); }
+  :is(.dark, .teaser) .btn-primary:hover { background: var(--pink); filter: none; }
+  :is(.dark, .teaser) .btn-ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px rgba(244,236,232,.55); }
+  :is(.dark, .teaser) .btn-ghost:hover { color: var(--red); box-shadow: inset 0 0 0 1px var(--red); filter: none; }
+
+  /* hero: poster type, hidden words under a moving light */
+  .dark .hero { position: relative; overflow: hidden; padding: 64px 0 80px; }
+  .dark .hero .wrap { position: relative; z-index: 1; grid-template-columns: 1.15fr .85fr; }
+  .dark h1 { font-size: clamp(118px, 18vw, 250px); line-height: .9; letter-spacing: 0; }
+  .dark h1 span { display: block; }
+  .dark h1 .outline { color: transparent; -webkit-text-stroke: 2px var(--ink); animation: flicker 7s infinite; }
+  .glitch { position: relative; color: var(--red); text-shadow: 0 0 60px rgba(240,20,38,.45); }
+  .glitch::before, .glitch::after { content: attr(data-text); position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; text-shadow: none; }
+  .glitch::before { color: var(--pink); clip-path: inset(0 0 100% 0); animation: glitchA 5s infinite steps(1); }
+  .glitch::after { color: var(--purple); clip-path: inset(100% 0 0 0); animation: glitchB 5s infinite steps(1); }
+  @keyframes glitchA {
+    0%, 88%, 100% { clip-path: inset(0 0 100% 0); transform: none; }
+    89% { clip-path: inset(8% 0 62% 0); transform: translate(-7px, -2px); }
+    91% { clip-path: inset(46% 0 30% 0); transform: translate(6px, 1px); }
+    93% { clip-path: inset(72% 0 6% 0); transform: translate(-4px, 2px); }
+    95% { clip-path: inset(24% 0 52% 0); transform: translate(5px, -1px); }
+  }
+  @keyframes glitchB {
+    0%, 89%, 100% { clip-path: inset(100% 0 0 0); transform: none; }
+    90% { clip-path: inset(60% 0 12% 0); transform: translate(7px, 1px); }
+    92% { clip-path: inset(14% 0 70% 0); transform: translate(-6px, -1px); }
+    94% { clip-path: inset(38% 0 40% 0); transform: translate(4px, 2px); }
+    96% { clip-path: inset(80% 0 2% 0); transform: translate(-5px, 0); }
+  }
+  @keyframes flicker { 0%, 91%, 94%, 97%, 100% { opacity: 1; } 92% { opacity: .15; } 95% { opacity: .5; } 96% { opacity: .1; } }
+  .dark .handle { font-family: var(--mono); font-size: 14px; letter-spacing: .08em; margin-top: 24px; }
+  .dark .handle b { color: var(--red); font-weight: 700; }
+  .dark .tagline { font-size: 25px; max-width: 28ch; }
+
+  .whisper {
+    position: absolute; inset: 0; z-index: 0; display: flex; flex-direction: column; justify-content: center;
+    font-family: var(--scream); font-size: clamp(60px, 8.5vw, 124px); line-height: .98; text-transform: uppercase;
+    white-space: nowrap; color: var(--red); opacity: .62; pointer-events: none;
+    -webkit-mask-image: radial-gradient(circle 220px at var(--mx, -999px) var(--my, -999px), #000 0%, rgba(0,0,0,.4) 50%, transparent 100%);
+            mask-image: radial-gradient(circle 220px at var(--mx, -999px) var(--my, -999px), #000 0%, rgba(0,0,0,.4) 50%, transparent 100%);
+  }
+  .whisper span:nth-child(even) { transform: translateX(-14%); }
+
+  .dark .hero-media { justify-self: end; width: 100%; max-width: 440px; }
+  .dark .frame { background: linear-gradient(160deg, var(--red), var(--purple)); }
+  .dark .hero-media::after { /* the cut */
+    content: ""; position: absolute; z-index: 4; left: -10%; right: -10%; top: 50%; height: 2px;
+    background: linear-gradient(90deg, transparent, #fff 18%, var(--red) 45%, var(--pink) 72%, transparent);
+    box-shadow: 0 0 14px var(--red), 0 0 40px rgba(240,20,38,.7);
+    transform: rotate(-26deg) scaleX(0); transform-origin: left center;
+    animation: slash .6s 1.2s cubic-bezier(.7,0,.2,1) forwards;
+  }
+  @keyframes slash { to { transform: rotate(-26deg) scaleX(1); } }
+  .dark .sticker {
+    left: -22px; bottom: 64px; transform: rotate(-9deg); padding: 4px 16px;
+    background: rgba(5,2,3,.6); color: var(--red); border: 3px solid var(--red);
+    font-family: var(--scream); font-weight: 400; font-size: 28px; letter-spacing: .1em;
+    text-shadow: 0 0 16px rgba(240,20,38,.7); box-shadow: 0 0 30px rgba(240,20,38,.35), inset 0 0 16px rgba(240,20,38,.3);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  }
+
+  /* every photo on this side gets the same red duotone; hover shows the real colors */
+  .dark .ph::before {
+    content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    background: linear-gradient(160deg, var(--red), #2a0838 85%); mix-blend-mode: multiply; opacity: .85; transition: opacity .5s;
+  }
+  .dark .ph::after { position: relative; z-index: 3; }
+  .dark .ph img { filter: grayscale(1) contrast(1.25) brightness(.95); transition: filter .5s, transform .6s; }
+  .dark .gallery .ph:hover::before { opacity: 0; }
+  .dark .gallery .ph:hover img { filter: none; }
+
+  /* crossed tape */
+  .bands { position: relative; height: 170px; overflow: hidden; }
+  .band {
+    position: absolute; left: -5%; width: 110%; top: 50%; padding: 12px 0; overflow: hidden; white-space: nowrap;
+    font-family: var(--scream); font-size: 34px; letter-spacing: .05em; text-transform: uppercase; line-height: 1.2;
+  }
+  .band-a { z-index: 2; background: var(--red); color: var(--btn-ink); transform: translateY(-50%) rotate(-4deg); box-shadow: 0 12px 40px rgba(240,20,38,.35); }
+  .band-b { z-index: 1; background: var(--bg); color: transparent; -webkit-text-stroke: 1px var(--pink); border-block: 1px solid var(--pink); transform: translateY(-50%) rotate(3deg); }
+  .track { display: inline-flex; animation: marquee 26s linear infinite; }
+  .band-b .track { animation-duration: 34s; animation-direction: reverse; }
+  .track span { padding-right: .4em; }
+  @keyframes marquee { to { transform: translateX(-50%); } }
+
+  /* socials */
+  .dark .link-card:hover { background: var(--red); border-color: var(--red); color: var(--btn-ink); }
+  .dark .link-card:hover .at, .dark .link-card:hover .arrow { color: rgba(10,3,4,.75); }
+  .dark .link-card:hover svg.icon, .dark .link-card.solid svg.icon { stroke: var(--btn-ink); }
+  .dark .link-card:hover svg.icon circle[fill], .dark .link-card.solid svg.icon circle[fill] { fill: var(--btn-ink); }
+  .dark .platform { font-family: var(--scream); text-transform: uppercase; font-size: 40px; letter-spacing: .02em; }
+  .dark .tag { border-color: currentColor; color: var(--red); }
+  .dark .link-card:hover .tag { color: var(--btn-ink); }
+  .dark .link-card.solid { background: var(--red); border-color: var(--red); color: var(--btn-ink); }
+  .dark .link-card.solid .at, .dark .link-card.solid .arrow { color: rgba(10,3,4,.72); }
+  .dark .link-card.solid:hover { background: var(--pink); border-color: var(--pink); }
+
+  /* settle your tab */
+  .tab-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 56px; align-items: start; }
+  .dark .steps { grid-template-columns: 1fr; gap: 0; }
+  .dark .step { display: grid; grid-template-columns: 80px 1fr; gap: 16px; align-items: baseline; padding: 20px 0; }
+  .dark .step b { font-family: var(--scream); font-style: normal; font-size: 54px; line-height: .9; margin: 0; color: transparent; -webkit-text-stroke: 1.5px var(--red); }
+  .dark .links.two { gap: 14px; }
+  .receipt-wrap { max-width: 380px; margin-left: auto; transform: rotate(2.5deg); filter: drop-shadow(0 30px 40px rgba(240,20,38,.35)); }
+  .receipt {
+    position: relative; padding: 30px 26px 46px; background: #efe6dc; color: #140a0b;
+    font-family: var(--mono); font-size: 13.5px; line-height: 1.5; text-transform: uppercase;
+    -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 18px 100%;
+            mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 18px 100%;
+  }
+  .r-top { text-align: center; border-bottom: 2px dashed rgba(20,10,11,.5); padding-bottom: 14px; margin-bottom: 10px; }
+  .r-title { font-family: var(--scream); font-size: 30px; letter-spacing: .06em; line-height: 1.1; }
+  .r-sub { font-size: 11.5px; letter-spacing: .08em; }
+  .r-rows > div { display: flex; align-items: baseline; padding: 5px 0; }
+  .r-rows i { flex: 1; border-bottom: 2px dotted rgba(20,10,11,.35); margin: 0 8px 4px; }
+  .r-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 17px; border-top: 2px solid #140a0b; margin-top: 12px; padding-top: 10px; }
+  .r-total span:last-child { color: #c00d1d; }
+  .r-bar {
+    height: 54px; margin: 22px 0 10px;
+    background: repeating-linear-gradient(90deg, #140a0b 0 2px, transparent 2px 4px, #140a0b 4px 7px, transparent 7px 8px, #140a0b 8px 9px, transparent 9px 12px, #140a0b 12px 15px, transparent 15px 17px);
+  }
+  .r-foot { text-align: center; font-size: 10.5px; letter-spacing: .14em; }
+  .r-stamp {
+    position: absolute; right: 16px; bottom: 66px; transform: rotate(-14deg);
+    font-family: var(--scream); font-size: 46px; letter-spacing: .06em; line-height: 1;
+    color: #d0101f; border: 4px solid #d0101f; padding: 4px 14px; opacity: .82; mix-blend-mode: multiply;
+  }
+
+  /* the bargain */
+  .dark .about .lede { font-family: var(--serif); font-style: italic; font-size: 27px; line-height: 1.3; color: var(--ink); max-width: 24ch; margin-top: 28px; }
+  .contract { position: relative; padding: 28px; border: 1px solid var(--line); background: linear-gradient(180deg, rgba(240,20,38,.07), transparent 45%), var(--surface); }
+  .contract::before, .contract::after { content: ""; position: absolute; width: 22px; height: 22px; border: 2px solid var(--red); }
+  .contract::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+  .contract::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+  .c-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+    font-family: var(--mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--red); }
+  .clauses { list-style: none; }
+  .clauses li { display: grid; grid-template-columns: 52px 1fr; gap: 12px; align-items: baseline; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .clauses b { font-family: var(--scream); font-weight: 400; font-size: 30px; line-height: 1; color: var(--red); }
+  .clauses p { font-family: var(--serif); font-size: 22px; line-height: 1.3; color: var(--ink); margin: 0; }
+  .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 30px; }
+  .sign > div { display: flex; flex-direction: column; justify-content: flex-end; }
+  .sig { font-family: var(--serif); font-style: italic; font-size: 42px; line-height: 1; color: var(--red); transform: rotate(-5deg); transform-origin: left bottom; }
+  .sig.ghost { font-family: var(--mono); font-style: normal; font-size: 12px; line-height: 1.4; color: var(--muted); transform: none; }
+  .sig-label { display: block; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--muted); font-family: var(--mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+
+  /* apply to serve */
+  .dark .contact { position: relative; overflow: hidden; }
+  .dark .contact::before { content: ""; position: absolute; left: 50%; top: 50%; width: 900px; height: 900px; transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(240,20,38,.22), transparent 60%); animation: pulse 4s ease-in-out infinite; pointer-events: none; }
+  .dark .contact .wrap { position: relative; }
+  .dark .contact h2 { font-size: clamp(70px, 13vw, 190px); }
+  @keyframes pulse { 50% { opacity: .45; transform: translate(-50%, -50%) scale(.9); } }
+
+  .dark footer { border-top-color: rgba(240,20,38,.3); }
+  .dark footer em { color: var(--red); font-size: 16px; }
+  .dark .foot-social a:hover { color: var(--red); }
+
+  /* knife cuts between sections */
+  .cut-wrap { overflow: hidden; padding: 24px 0; }
+  .cut { height: 2px; width: 112%; margin-left: -6%; transform: rotate(-2deg);
+    background: linear-gradient(90deg, transparent, var(--red) 18%, var(--pink) 50%, var(--purple) 82%, transparent); box-shadow: 0 0 16px rgba(240,20,38,.7); }
+  .cut.up { transform: rotate(1.5deg); }
+
+  /* scroll reveals (only once JS is running) */
+  html.js .dark .reveal { opacity: 0; transform: translateY(30px); transition: opacity .8s ease, transform .9s cubic-bezier(.2,.8,.2,1); }
+  html.js .dark .reveal.in { opacity: 1; transform: none; }
+  html.js .dark .cut { transform: rotate(-2deg) scaleX(0); transform-origin: left center; transition: transform 1.1s cubic-bezier(.7,0,.2,1); }
+  html.js .dark .cut-wrap.in .cut { transform: rotate(-2deg) scaleX(1); }
+  html.js .dark .cut.up { transform: rotate(1.5deg) scaleX(0); transform-origin: right center; }
+  html.js .dark .cut-wrap.in .cut.up { transform: rotate(1.5deg) scaleX(1); }
+
+  /* the peek at the wicked side, on the sweet side */
+  .teaser .card {
+    position: relative; overflow: hidden; text-align: center; color: var(--ink); padding: 88px 24px;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(240,20,38,.35), transparent 50%),
+      radial-gradient(circle at 85% 90%, rgba(155,48,255,.22), transparent 50%),
+      var(--bg);
+    clip-path: polygon(0 0, calc(100% - 40px) 0, 100% 40px, 100% 100%, 40px 100%, 0 calc(100% - 40px));
+  }
+  .teaser .card::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.3) 0 1px, transparent 1px 3px); }
+  .teaser .card > * { position: relative; z-index: 1; }
+  .teaser h2 { font-size: clamp(56px, 9vw, 120px); }
+  .teaser p.sub { color: var(--muted); margin: 18px auto 34px; max-width: 38ch; }
+
   /* overlays live outside the flipping page */
-  .lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(8,6,10,.94); display: none; place-items: center; padding: 24px; cursor: zoom-out; }
+  .fx { position: fixed; inset: 0; z-index: 26; pointer-events: none; display: none; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 45%, transparent 60%, rgba(0,0,0,.42) 100%); }
+  body[data-side="dark"]:not(.flipping) .fx { display: block; }
+  .fx::before { content: ""; position: absolute; inset: -60%; opacity: .1; animation: grain .9s steps(5) infinite;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  .fx::after { content: ""; position: absolute; inset: 0; opacity: .35; background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px); }
+  @keyframes grain { 0%, 100% { transform: translate(0, 0); } 20% { transform: translate(-5%, 3%); } 40% { transform: translate(4%, -6%); } 60% { transform: translate(-3%, 5%); } 80% { transform: translate(6%, 2%); } }
+  .flash { position: fixed; inset: 0; z-index: 90; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(240,20,38,.15), rgba(240,20,38,.6)); }
+  .flash.go { animation: flash .8s ease-out; }
+  @keyframes flash { 0% { opacity: 0; } 10% { opacity: 1; } 25% { opacity: .15; } 38% { opacity: .75; } 100% { opacity: 0; } }
+  .dark.arrive main { animation: jolt .4s steps(2); }
+  @keyframes jolt { 0%, 100% { transform: translate(0); } 25% { transform: translate(-6px, 3px); } 50% { transform: translate(5px, -2px); } 75% { transform: translate(-3px, -3px); } }
+
+  .lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(5,2,3,.95); display: none; place-items: center; padding: 24px; cursor: zoom-out; }
   .lightbox.open { display: grid; }
   .lightbox img { max-height: 90vh; max-width: 92vw; object-fit: contain; }
-  .gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px;
-    background: rgba(8,6,10,.88); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); color: var(--ink); }
+  .gate { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; color: var(--ink);
+    background: radial-gradient(circle at 50% 40%, rgba(240,20,38,.18), transparent 60%), rgba(5,2,3,.93);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
   .gate[hidden] { display: none; }
   .gate-box { max-width: 460px; text-align: center; }
-  .gate-box h2 { font-size: clamp(40px, 8vw, 60px); margin-bottom: 14px; }
+  .gate-box h2 { font-size: clamp(60px, 13vw, 104px); margin-bottom: 14px; }
   .gate-box p { color: var(--muted); margin-bottom: 30px; }
   .gate-box .cta-row { justify-content: center; }
+
+  /* the late-night call */
+  .call { position: fixed; z-index: 60; right: 20px; bottom: 20px; width: min(360px, calc(100vw - 32px));
+    display: flex; align-items: center; gap: 14px; padding: 14px 14px 14px 16px; color: var(--ink);
+    background: rgba(11,4,5,.94); border: 1px solid var(--red); box-shadow: 0 20px 60px -10px rgba(240,20,38,.55);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .call[hidden] { display: none; }
+  .call:not([hidden]) { animation: callIn .5s cubic-bezier(.2,.9,.3,1.2) both, shake .45s .6s 3; }
+  .call.ring { animation: shake .45s 2; }
+  .call-ring { position: relative; flex: none; width: 46px; height: 46px; border-radius: 50%; background: var(--red); color: var(--btn-ink); display: grid; place-items: center; }
+  .call-ring::before, .call-ring::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--red); animation: ring 1.4s ease-out infinite; }
+  .call-ring::after { animation-delay: .7s; }
+  .call svg { width: 22px; height: 22px; }
+  .call-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+  .call-label { font-family: var(--mono); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+  .call-text b { font-family: var(--scream); font-weight: 400; font-size: 24px; letter-spacing: .08em; }
+  .call-sub { font-size: 12.5px; color: var(--body-text); }
+  .call-btn { flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+  .call-btn.no { background: #2a0d12; border: 1px solid var(--line); }
+  .call-btn.no svg { transform: rotate(135deg); }
+  .call-btn.yes { background: var(--red); color: var(--btn-ink); }
+  @keyframes callIn { from { transform: translateY(30px) scale(.96); opacity: 0; } }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-4px) rotate(-1deg); } 40% { transform: translateX(4px) rotate(1deg); } 60% { transform: translateX(-3px); } 80% { transform: translateX(3px); } }
+  @keyframes ring { from { transform: scale(1); opacity: .9; } to { transform: scale(1.9); opacity: 0; } }
+
   .sparkles { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
 
   @media (max-width: 860px) {
     .hero { padding: 40px 0 64px; }
-    .hero .wrap, .about .wrap { grid-template-columns: 1fr; gap: 44px; }
+    .hero .wrap, .about .wrap, .dark .hero .wrap, .tab-grid { grid-template-columns: 1fr; gap: 44px; }
     .hero-media { max-width: 440px; }
+    .dark .hero-media { justify-self: start; }
     .links, .links.two, .steps { grid-template-columns: 1fr; }
     .steps { gap: 0; }
     .gallery { grid-template-columns: 1fr 1fr; grid-auto-rows: 200px; }
@@ -270,16 +500,28 @@
     .gallery .wide:last-child { grid-column: span 1; }
     .nav-links { gap: 18px; }
     section { padding: 72px 0; }
+    .receipt-wrap { margin: 0 auto; }
+    .bands { height: 130px; }
+    .band { font-size: 26px; padding: 9px 0; }
   }
   @media (max-width: 560px) {
     .wrap { padding: 0 16px; }
     .nav-links > *:not(:last-child) { display: none; }
-    .tagline { font-size: 22px; }
+    .tagline, .dark .tagline { font-size: 22px; }
     .sticker { left: 12px; }
+    .dark .sticker { left: 10px; font-size: 22px; }
     .btn { width: 100%; justify-content: center; }
+    .dark .platform { font-size: 34px; }
+    .dark .step { grid-template-columns: 62px 1fr; }
+    .dark .step b { font-size: 44px; }
+    .clauses p { font-size: 19px; }
+    .sig { font-size: 34px; }
+    .contract { padding: 22px 18px; }
+    .call { left: 16px; right: 16px; bottom: 16px; width: auto; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
+    .dark .hero-media::after { transform: rotate(-26deg); }
   }
 </style>
 </head>
@@ -393,7 +635,7 @@
       <div class="wrap">
         <div class="card">
           <p class="eyebrow">18+ only</p>
-          <h2>You already <em class="shimmer-text">ate.</em></h2>
+          <h2>You already <em>ate.</em></h2>
           <p class="sub">Every fairy has a wicked side, and nobody leaves her table the way they came in.</p>
           <button class="btn btn-primary" data-flip="dark">Flip me ↻</button>
         </div>
@@ -426,16 +668,24 @@
 
   <main id="d-top">
     <header class="hero">
+      <div class="whisper" aria-hidden="true">
+        <span>mine mine mine mine mine mine mine mine</span>
+        <span>i see you i see you i see you i see you</span>
+        <span>mine mine mine mine mine mine mine mine</span>
+        <span>no way out no way out no way out no way out</span>
+        <span>mine mine mine mine mine mine mine mine</span>
+        <span>i see your wallet i see your wallet</span>
+      </div>
       <div class="wrap">
         <div>
-          <p class="eyebrow">Findom · Wicked fae · Your new expense</p>
-          <h1>You<br><em class="shimmer-text">pay.</em></h1>
+          <p class="eyebrow">Findom · Owner · Your new expense</p>
+          <h1><span class="outline">You</span><span class="glitch" data-text="pay.">pay.</span></h1>
           <p class="handle">Alyssa, aka <b>@angrylittlefairy</b></p>
           <!-- EDIT: wicked side tagline -->
-          <p class="tagline">You ate the fairy food. Now you're hers, and nobody leaves the fairy court with their wallet.</p>
+          <p class="tagline">You ate the fairy food. Now you're mine, and nobody leaves my court with their wallet.</p>
           <div class="cta-row">
-            <a class="btn btn-primary" href="#d-tribute">Pay up ✦</a>
-            <a class="btn btn-ghost" href="#d-links">Follow me</a>
+            <a class="btn btn-primary" href="#d-tribute">Pay up</a>
+            <a class="btn btn-ghost" href="#d-links">Follow</a>
           </div>
         </div>
         <div class="hero-media">
@@ -443,22 +693,27 @@
             <!-- Drop a photo at images/dark-hero.jpg (portrait, 4:5) -->
             <div class="ph" data-label="dark-hero.jpg"><img data-src="images/dark-hero.jpg" alt="Alyssa" onerror="this.remove()"></div>
           </div>
-          <span class="sticker">Bites your wallet</span>
+          <span class="sticker">The owner</span>
         </div>
       </div>
     </header>
 
+    <div class="bands" aria-hidden="true">
+      <div class="band band-a"><div class="track"><span>You ate ✦ You stay ✦ You pay ✦ You ate ✦ You stay ✦ You pay ✦ You ate ✦ You stay ✦ You pay ✦</span><span>You ate ✦ You stay ✦ You pay ✦ You ate ✦ You stay ✦ You pay ✦ You ate ✦ You stay ✦ You pay ✦</span></div></div>
+      <div class="band band-b"><div class="track"><span>Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦</span><span>Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦ Owned ✦</span></div></div>
+    </div>
+
     <section id="d-links">
       <div class="wrap">
-        <div class="section-head">
-          <h2>Worship me <em class="shimmer-text">everywhere.</em></h2>
-          <p class="section-note">Follow, subscribe, and keep your wallet close. It won't be yours for long.</p>
+        <div class="section-head reveal">
+          <h2>Follow. Subscribe. <em>Obey.</em></h2>
+          <p class="section-note">Keep your wallet close. It won't be yours for long.</p>
         </div>
-        <div class="links">
+        <div class="links reveal">
           <!-- EDIT: Instagram URL + handle -->
           <a class="link-card" href="https://instagram.com/angrylittlefairy" target="_blank" rel="noopener">
             <div class="top">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#g)" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1" fill="#ff5fa2" stroke="none"/></svg>
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1" fill="#ff1f6d" stroke="none"/></svg>
               <span class="arrow">↗</span>
             </div>
             <div><div class="platform">Instagram</div><div class="at">@angrylittlefairy</div></div>
@@ -466,7 +721,7 @@
           <!-- EDIT: TikTok URL + handle -->
           <a class="link-card" href="https://www.tiktok.com/@angrylittlefairy" target="_blank" rel="noopener">
             <div class="top">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#g)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.4 2.6 2.2 4.4 5 4.6"/></svg>
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.4 2.6 2.2 4.4 5 4.6"/></svg>
               <span class="arrow">↗</span>
             </div>
             <div><div class="platform">TikTok</div><div class="at">@angrylittlefairy</div></div>
@@ -474,7 +729,7 @@
           <!-- EDIT: OnlyFans or Fansly URL + handle -->
           <a class="link-card" href="https://onlyfans.com/angrylittlefairy" target="_blank" rel="noopener">
             <div class="top">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#g)" stroke-width="1.8" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.2v2.6" stroke-linecap="round"/></svg>
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.2v2.6" stroke-linecap="round"/></svg>
               <span class="tag">18+</span>
             </div>
             <div><div class="platform">OnlyFans</div><div class="at">@angrylittlefairy</div></div>
@@ -483,48 +738,77 @@
       </div>
     </section>
 
-    <section id="d-tribute" class="tribute">
+    <div class="cut-wrap" aria-hidden="true"><div class="cut"></div></div>
+
+    <section id="d-tribute">
       <div class="wrap">
-        <div class="section-head">
-          <h2>Settle your <em class="shimmer-text">tab.</em></h2>
-          <p class="section-note">You ate at her table. Now you pay, and you keep paying. Tribute first, then you may speak.</p>
+        <div class="section-head reveal">
+          <h2>Settle your <em>tab.</em></h2>
+          <p class="section-note">You ate at my table. Now you pay, and you keep paying. Tribute first, then you may speak.</p>
         </div>
-        <!-- EDIT: minimum first tribute -->
-        <div class="steps">
-          <div class="step"><b class="shimmer-text">01</b><p><strong>Tribute first.</strong> Your first offering is $TBD minimum. Anything less is ignored.</p></div>
-          <div class="step"><b class="shimmer-text">02</b><p><strong>Then message.</strong> Email or DM with your name and your receipt. No receipt, no reply.</p></div>
-          <div class="step"><b class="shimmer-text">03</b><p><strong>Then wait.</strong> I'll reach you when I'm ready. Begging doesn't make it faster.</p></div>
-        </div>
-        <div class="links two">
-          <!-- EDIT: wishlist URL (Throne etc.) -->
-          <a class="link-card hot" href="#" target="_blank" rel="noopener">
-            <div class="top">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#g)" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z"/></svg>
-              <span class="arrow">↗</span>
+        <div class="tab-grid">
+          <div class="reveal">
+            <!-- EDIT: minimum first tribute -->
+            <div class="steps">
+              <div class="step"><b>01</b><p><strong>Tribute first.</strong> Your first offering is $TBD minimum. Anything less is ignored.</p></div>
+              <div class="step"><b>02</b><p><strong>Then message.</strong> Email or DM with your name and your receipt. No receipt, no reply.</p></div>
+              <div class="step"><b>03</b><p><strong>Then wait.</strong> I'll reach you when I'm ready. Begging doesn't make it faster.</p></div>
             </div>
-            <div><div class="platform">Wishlist</div><div class="at">Buy me something pretty</div></div>
-          </a>
-          <!-- EDIT: tribute URL -->
-          <a class="link-card hot" href="#" target="_blank" rel="noopener">
-            <div class="top">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#g)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M16.5 7.5c0-1.9-2-3-4.5-3s-4.5 1.2-4.5 3.2c0 4.6 9 2.5 9 7.1 0 2-2 3.2-4.5 3.2s-4.5-1.1-4.5-3"/></svg>
-              <span class="arrow">↗</span>
+            <div class="links two">
+              <!-- EDIT: tribute URL -->
+              <a class="link-card solid" href="#" target="_blank" rel="noopener">
+                <div class="top">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M16.5 7.5c0-1.9-2-3-4.5-3s-4.5 1.2-4.5 3.2c0 4.6 9 2.5 9 7.1 0 2-2 3.2-4.5 3.2s-4.5-1.1-4.5-3"/></svg>
+                  <span class="arrow">↗</span>
+                </div>
+                <div><div class="platform">Tribute</div><div class="at">Show me you mean it</div></div>
+              </a>
+              <!-- EDIT: wishlist URL (Throne etc.) -->
+              <a class="link-card" href="#" target="_blank" rel="noopener">
+                <div class="top">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="url(#gd)" stroke-width="1.8" stroke-linejoin="round"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z"/></svg>
+                  <span class="arrow">↗</span>
+                </div>
+                <div><div class="platform">Wishlist</div><div class="at">Buy me something pretty</div></div>
+              </a>
             </div>
-            <div><div class="platform">Tribute</div><div class="at">Show me you mean it</div></div>
-          </a>
+            <p class="fine">Every tribute is a gift to the fae. No refunds, no takebacks, no way out.<br>For entertainment between consenting adults. All tributes are voluntary and non-refundable.</p>
+          </div>
+          <div class="receipt-wrap reveal">
+            <div class="receipt" role="img" aria-label="Your tab: total due, everything.">
+              <div class="r-top">
+                <div class="r-title">The Fairy Court</div>
+                <div class="r-sub">Tab #<span id="tabno">000001</span> · Table for one</div>
+                <div class="r-sub">Date: tonight · Time: too late</div>
+              </div>
+              <div class="r-rows">
+                <div><span>Fairy food x1</span><i></i><span>Eaten</span></div>
+                <div><span>Your attention</span><i></i><span>Mine</span></div>
+                <div><span>Your free will</span><i></i><span>Forfeit</span></div>
+                <div><span>Way out</span><i></i><span>None</span></div>
+                <!-- EDIT: minimum first tribute (match the steps) -->
+                <div><span>First tribute</span><i></i><span>$TBD+</span></div>
+              </div>
+              <div class="r-total"><span>Total due</span><span>Everything</span></div>
+              <div class="r-bar"></div>
+              <div class="r-foot">No refunds · No exits · No escape</div>
+              <div class="r-stamp">Unpaid</div>
+            </div>
+          </div>
         </div>
-        <p class="fine">Every tribute is a gift to the fae. No refunds, no takebacks, no way out.<br>For entertainment between consenting adults. All tributes are voluntary and non-refundable.</p>
       </div>
     </section>
 
+    <div class="cut-wrap" aria-hidden="true"><div class="cut up"></div></div>
+
     <section id="d-gallery">
       <div class="wrap">
-        <div class="section-head">
-          <h2>Look, <em class="shimmer-text">don't touch.</em></h2>
+        <div class="section-head reveal">
+          <h2>Look. <em>Don't touch.</em></h2>
           <p class="section-note">Looking is free. Everything else costs extra.</p>
         </div>
-        <!-- Drop photos at images/dark-01.jpg ... dark-06.jpg (01 is tall, 04 and 06 are wide) -->
-        <div class="gallery">
+        <!-- Drop photos at images/dark-01.jpg ... dark-06.jpg (01 is tall, 04 and 06 are wide). They get a red duotone automatically. -->
+        <div class="gallery reveal">
           <div class="ph tall" data-label="dark-01.jpg"><img data-src="images/dark-01.jpg" alt="" onerror="this.remove()"></div>
           <div class="ph" data-label="dark-02.jpg"><img data-src="images/dark-02.jpg" alt="" onerror="this.remove()"></div>
           <div class="ph" data-label="dark-03.jpg"><img data-src="images/dark-03.jpg" alt="" onerror="this.remove()"></div>
@@ -535,28 +819,37 @@
       </div>
     </section>
 
+    <div class="cut-wrap" aria-hidden="true"><div class="cut"></div></div>
+
     <section id="d-about" class="about">
       <div class="wrap">
-        <div><h2>The <em class="shimmer-text">bargain.</em></h2></div>
-        <div>
+        <div class="reveal">
+          <h2>The <em>bargain.</em></h2>
           <!-- EDIT: wicked side bio -->
-          <p>I'm Alyssa. Small, sweet-looking, and absolutely not sweet. I like pretty things, expensive things, and watching you pay for both.</p>
-          <p>I don't chase. You come to me, you make your offering, and you're grateful I took it. Timewasters get blocked, not entertained.</p>
+          <p class="lede">I'm Alyssa. Small, sweet-looking, and absolutely not sweet.</p>
+          <p>I like pretty things, expensive things, and watching you pay for both. I don't chase. You come to me, you make your offering, and you're grateful I took it. Timewasters get blocked, not entertained.</p>
+        </div>
+        <div class="contract reveal">
+          <div class="c-head"><span>Contract of ownership</span><span>Binding under fae law</span></div>
           <!-- EDIT: rules -->
-          <dl class="stats">
-            <div class="stat"><dt>Rule 01</dt><dd>Tribute first.</dd></div>
-            <div class="stat"><dt>Rule 02</dt><dd>Nothing is free.</dd></div>
-            <div class="stat"><dt>Rule 03</dt><dd>Don't waste my time.</dd></div>
-            <div class="stat"><dt>Rule 04</dt><dd>Never thank a fae. Pay her.</dd></div>
-          </dl>
+          <ol class="clauses">
+            <li><b>§1</b><p>Tribute comes first. Always.</p></li>
+            <li><b>§2</b><p>Nothing is free. Not my time, not my attention, not my name.</p></li>
+            <li><b>§3</b><p>Waste my time and you're gone.</p></li>
+            <li><b>§4</b><p>Never thank a fae. Pay her.</p></li>
+          </ol>
+          <div class="sign">
+            <div><span class="sig">Alyssa</span><span class="sig-label">Owner</span></div>
+            <div><span class="sig ghost">Signed the moment you ate.</span><span class="sig-label">Property</span></div>
+          </div>
         </div>
       </div>
     </section>
 
     <section class="contact">
-      <div class="wrap">
+      <div class="wrap reveal">
         <p class="eyebrow">Serious inquiries only</p>
-        <h2>Apply to <em class="shimmer-text">serve.</em></h2>
+        <h2>Apply to <em>serve.</em></h2>
         <p>Tell me who you are and what you can afford. Applications with a tribute get read first. Everything else waits, or doesn't.</p>
         <!-- EDIT: email -->
         <a class="btn btn-primary" href="mailto:serve@angrylittlefairy.com?subject=Application">serve@angrylittlefairy.com</a>
@@ -576,16 +869,33 @@
 </div>
 </div>
 
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5fa2"/><stop offset=".5" stop-color="#c9a7ff"/><stop offset="1" stop-color="#9ff0e0"/></linearGradient></defs></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5fa2"/><stop offset=".5" stop-color="#c9a7ff"/><stop offset="1" stop-color="#9ff0e0"/></linearGradient>
+  <linearGradient id="gd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f01426"/><stop offset=".5" stop-color="#ff1f6d"/><stop offset="1" stop-color="#9b30ff"/></linearGradient>
+</defs></svg>
+
+<div class="fx" aria-hidden="true"></div>
+<div class="flash" id="flash" aria-hidden="true"></div>
+
+<div class="call dark" id="call" role="status" hidden data-nosnippet>
+  <div class="call-ring" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg></div>
+  <div class="call-text">
+    <span class="call-label">Incoming call</span>
+    <b>Owner</b>
+    <span class="call-sub" id="call-sub">I know you're still here.</span>
+  </div>
+  <button class="call-btn no" data-call="decline" aria-label="Decline"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg></button>
+  <button class="call-btn yes" data-call="answer" aria-label="Answer"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg></button>
+</div>
 
 <div class="gate dark" id="gate" hidden data-nosnippet>
   <div class="gate-box">
     <p class="eyebrow">Adults only</p>
-    <h2>Are you <em class="shimmer-text">18<span style="font-family:var(--sans);font-style:normal;font-weight:500">+</span>?</em></h2>
-    <p>One bite and you're hers. The other side is for adults only. By entering you confirm you're at least 18.</p>
+    <h2>Are you 18+?</h2>
+    <p>One bite and you're mine. The other side is for adults only. By entering you confirm you're at least 18.</p>
     <div class="cta-row">
       <button class="btn btn-primary" id="gate-yes">Enter</button>
-      <button class="btn btn-ghost" id="gate-no">Stay sweet</button>
+      <button class="btn btn-ghost" id="gate-no">Run</button>
     </div>
   </div>
 </div>
@@ -593,11 +903,14 @@
 <div class="lightbox" aria-hidden="true"><img alt=""></div>
 
 <script>
+  document.documentElement.classList.add('js');
   document.querySelectorAll('.yr').forEach(el => el.textContent = new Date().getFullYear());
+  document.getElementById('tabno').textContent = String(100000 + Math.floor(Math.random() * 900000));
 
   const body = document.body, flipper = document.getElementById('flipper');
   const faces = { light: document.getElementById('light'), dark: document.getElementById('dark') };
   const gate = document.getElementById('gate');
+  const flash = document.getElementById('flash');
   const theme = document.querySelector('meta[name="theme-color"]');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let busy = false, adultOk = false;
@@ -609,17 +922,52 @@
   function loadDark() { // wicked-side photos only load once someone is past the gate
     faces.dark.querySelectorAll('img[data-src]').forEach(img => { img.src = img.dataset.src; img.removeAttribute('data-src'); });
   }
+
+  // the late-night call: rings once per visit, a few seconds after you cross over
+  const call = document.getElementById('call'), callSub = document.getElementById('call-sub');
+  let callTimer;
+  function armCall() {
+    clearTimeout(callTimer);
+    let rang = false;
+    try { rang = sessionStorage.getItem('alf-call') === '1'; } catch (e) {}
+    if (rang) return;
+    callTimer = setTimeout(() => {
+      if (body.dataset.side !== 'dark' || busy) return;
+      call.hidden = false;
+      try { sessionStorage.setItem('alf-call', '1'); } catch (e) {}
+    }, 9000);
+  }
+  function hangUp() { clearTimeout(callTimer); call.hidden = true; }
+  call.addEventListener('click', e => {
+    const b = e.target.closest('[data-call]'); if (!b) return;
+    if (b.dataset.call === 'answer') {
+      hangUp();
+      document.getElementById('d-tribute').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
+    } else {
+      callSub.textContent = 'Declining costs extra.';
+      call.classList.remove('ring'); void call.offsetWidth; call.classList.add('ring');
+      setTimeout(hangUp, 2200);
+    }
+  });
+
   function settle(side) {
     body.dataset.side = side;
     faces.light.setAttribute('aria-hidden', side !== 'light');
     faces.dark.setAttribute('aria-hidden', side !== 'dark');
-    theme.content = side === 'dark' ? '#0d0a10' : '#fff4f8';
+    theme.content = side === 'dark' ? '#050203' : '#fff4f8';
     history.replaceState(null, '', side === 'dark' ? '#wicked' : location.pathname);
+    if (side === 'dark') armCall(); else hangUp();
+  }
+  function arrive() { // red flash and a jolt when you land on the wicked side
+    if (reduce) return;
+    flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go');
+    faces.dark.classList.add('arrive');
+    setTimeout(() => faces.dark.classList.remove('arrive'), 450);
   }
   function flip(to) {
     if (busy || body.dataset.side === to) return;
     if (to === 'dark' && !adult()) { gate.hidden = false; return; }
-    if (to === 'dark') loadDark();
+    if (to === 'dark') loadDark(); else hangUp();
     window.scrollTo(0, 0);
     if (reduce) { settle(to); return; }
     busy = true;
@@ -630,8 +978,9 @@
       if (finished) return; finished = true;
       flipper.classList.remove('to-dark', 'to-light');
       body.classList.remove('flipping');
-      settle(to);
       busy = false;
+      settle(to);
+      if (to === 'dark') arrive();
     };
     flipper.addEventListener('animationend', e => { if (e.target === flipper) done(); });
     setTimeout(done, 1400);
@@ -649,6 +998,30 @@
     if (adult()) { loadDark(); settle('dark'); } else { gate.hidden = false; }
   }
 
+  // scroll reveals on the wicked side
+  (function () {
+    const els = document.querySelectorAll('.reveal, .cut-wrap');
+    if (reduce || !('IntersectionObserver' in window)) { els.forEach(el => el.classList.add('in')); return; }
+    const io = new IntersectionObserver(entries => entries.forEach(en => {
+      if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+    }), { threshold: .12 });
+    els.forEach(el => io.observe(el));
+  })();
+
+  // hidden words in the hero only show under the light (cursor on desktop, drifting on phones)
+  (function () {
+    const hero = faces.dark.querySelector('.hero');
+    const spot = (x, y) => { hero.style.setProperty('--mx', x + 'px'); hero.style.setProperty('--my', y + 'px'); };
+    hero.addEventListener('pointermove', e => { const r = hero.getBoundingClientRect(); spot(e.clientX - r.left, e.clientY - r.top); });
+    if (reduce || !matchMedia('(hover: none)').matches) return;
+    (function drift(t) {
+      if (body.dataset.side === 'dark' && scrollY < hero.offsetHeight) {
+        spot(hero.clientWidth * (.5 + .4 * Math.sin(t / 2300)), hero.clientHeight * (.5 + .36 * Math.sin(t / 1700 + 1)));
+      }
+      requestAnimationFrame(drift);
+    })(0);
+  })();
+
   // lightbox for gallery photos that exist
   const lb = document.querySelector('.lightbox'), lbImg = lb.querySelector('img');
   document.querySelectorAll('.gallery .ph').forEach(el => el.addEventListener('click', () => {
@@ -658,23 +1031,24 @@
   lb.addEventListener('click', () => lb.classList.remove('open'));
   addEventListener('keydown', e => { if (e.key === 'Escape') { lb.classList.remove('open'); gate.hidden = true; } });
 
-  // a little fairy dust
+  // fairy dust on the sweet side, embers on the wicked side
   (function () {
     if (reduce) return;
     const c = document.querySelector('.sparkles'), x = c.getContext('2d');
-    const colors = ['#ff5fa2', '#c9a7ff', '#9ff0e0', '#ffd6e8'];
+    const palette = { light: ['#ff5fa2', '#c9a7ff', '#9ff0e0', '#ffd6e8'], dark: ['#f01426', '#ff1f6d', '#9b30ff', '#ff4a3d'] };
     let w, h, dots = [];
     function size() { w = c.width = innerWidth * devicePixelRatio; h = c.height = innerHeight * devicePixelRatio; }
-    function make() { return { x: Math.random() * w, y: h + Math.random() * h, r: (Math.random() * 1.6 + .4) * devicePixelRatio, s: Math.random() * .35 + .1, d: Math.random() * Math.PI * 2, c: colors[Math.random() * colors.length | 0] }; }
+    function make() { return { x: Math.random() * w, y: h + Math.random() * h, r: (Math.random() * 1.6 + .4) * devicePixelRatio, s: Math.random() * .35 + .1, d: Math.random() * Math.PI * 2, ci: Math.random() * 4 | 0 }; }
     size(); addEventListener('resize', size);
     for (let i = 0; i < 38; i++) { const p = make(); p.y = Math.random() * h; dots.push(p); }
     (function tick(t) {
+      const dark = body.dataset.side === 'dark', colors = dark ? palette.dark : palette.light;
       x.clearRect(0, 0, w, h);
       for (const p of dots) {
-        p.y -= p.s * devicePixelRatio; p.x += Math.sin(t / 1400 + p.d) * .25;
+        p.y -= p.s * (dark ? 1.4 : 1) * devicePixelRatio; p.x += Math.sin(t / 1400 + p.d) * .25;
         if (p.y < -10) Object.assign(p, make());
         x.globalAlpha = .35 + .35 * Math.sin(t / 500 + p.d);
-        x.fillStyle = p.c; x.beginPath(); x.arc(p.x, p.y, p.r, 0, 7); x.fill();
+        x.fillStyle = colors[p.ci]; x.beginPath(); x.arc(p.x, p.y, p.r * (dark ? 1.3 : 1), 0, 7); x.fill();
       }
       requestAnimationFrame(tick);
     })(0);
